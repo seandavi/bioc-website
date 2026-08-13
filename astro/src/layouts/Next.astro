@@ -1,0 +1,94 @@
+---
+/**
+ * Shell for the /next/ preview pages. Unlike Site.astro (a deliberately
+ * faithful port of the legacy chrome), this is the clean-slate look: system
+ * fonts, no jQuery, no legacy CSS cascade, dark-mode aware. Content is static;
+ * reactivity is layered over it per-page (ADR 0008 / #79).
+ */
+const { title, description } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description ?? 'Bioconductor next-gen preview'} />
+    <title>{title ? `${title} · Bioconductor next` : 'Bioconductor next'}</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="wrap">
+        <a class="brand" href="/next/">Bioconductor</a>
+        <span class="preview-pill">next preview</span>
+      </div>
+    </header>
+    <main class="wrap">
+      <slot />
+    </main>
+    <footer class="wrap foot">
+      Rendered from the bioc-prop data plane · <a href="/next/">preview index</a>
+    </footer>
+  </body>
+</html>
+
+<style is:global>
+  :root {
+    --bg: #ffffff;
+    --fg: #1c2430;
+    --muted: #5b6675;
+    --card: #f7f9fb;
+    --border: #dde4ec;
+    --accent: #1a81c2;   /* Bioconductor blue */
+    --accent-2: #87b13f; /* Bioconductor green */
+    --ok-bg: #e3f2e3;   --ok-fg: #1e6b2e;
+    --note-bg: #fbf4d5; --note-fg: #7a6410;
+    --warn-bg: #fde8d2; --warn-fg: #92500e;
+    --err-bg: #fadcdc;  --err-fg: #a12626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141a21;
+      --fg: #e6ebf1;
+      --muted: #94a0ae;
+      --card: #1b232d;
+      --border: #2c3947;
+      --accent: #55a8dd;
+      --accent-2: #9dc35d;
+      --ok-bg: #1d3322;   --ok-fg: #8fd49b;
+      --note-bg: #34301a; --note-fg: #ddc55e;
+      --warn-bg: #3a2a17; --warn-fg: #e4a967;
+      --err-bg: #3d2020;  --err-fg: #ef9a9a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 16px/1.55 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; }
+
+  .topbar {
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+  }
+  .topbar .wrap { display: flex; align-items: center; gap: 0.75rem; padding-top: 0.6rem; padding-bottom: 0.6rem; }
+  .brand { font-weight: 700; font-size: 1.05rem; color: var(--fg); letter-spacing: 0.01em; }
+  .brand:hover { text-decoration: none; color: var(--accent); }
+  .preview-pill {
+    font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--accent-2); border: 1px solid var(--accent-2);
+    border-radius: 999px; padding: 0.1em 0.6em;
+  }
+  main { padding: 1.5rem 1.25rem 3rem; }
+  .foot {
+    border-top: 1px solid var(--border);
+    color: var(--muted); font-size: 0.85rem;
+    padding-top: 1rem; padding-bottom: 2rem;
+  }
+</style>

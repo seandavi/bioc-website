@@ -1,0 +1,7 @@
+node_modules/
+dist/
+# Staged copy of the shared JSON contract; regenerate rather than commit (17 MB).
+data/
+
+# Copied verbatim from the upstream repo by `just data-assets` (32 MB).
+public/

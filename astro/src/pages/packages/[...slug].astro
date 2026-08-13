@@ -1,0 +1,65 @@
+---
+/**
+ * Everything under /packages/. Three page kinds share this route because they
+ * share one dynamic segment space and Astro allows a single catch-all per
+ * directory:
+ *
+ *   detail     /packages/<version>/<repo>/html/<pkg>.html   (92,162 pages)
+ *   index      /packages/<version>/<repo>/index.html        (123 pages)
+ *   biocviews  /packages/<version>/BiocViews.html           (35 pages)
+ *
+ * The dispatch is on an explicit `kind` prop rather than on re-parsing the
+ * slug, so adding a kind cannot silently fall through to the wrong renderer.
+ */
+import Site from '../../layouts/Site.astro';
+import PackageDetail from '../../components/PackageDetail.astro';
+import PackageIndex from '../../components/PackageIndex.astro';
+import BiocViews from '../../components/BiocViews.astro';
+import { versions, reposFor, loadRepo, loadTree, repoLabel } from '../../lib/packages.js';
+
+export async function getStaticPaths() {
+  const paths = [];
+  for (const version of versions()) {
+    for (const repo of reposFor(version)) {
+      const pkgs = loadRepo(version, repo);
+      for (const [name, pkg] of Object.entries(pkgs)) {
+        paths.push({
+          params: { slug: `${version}/${repo}/html/${name}` },
+          props: { kind: 'detail', pkg, name, version, repo },
+        });
+      }
+      // build.format is 'file', so the '<...>/index' slug emits
+      // '<...>/index.html' -- which is what the Worker resolves a
+      // trailing-slash URL to (worker/src/keys.ts candidates()).
+      paths.push({
+        params: { slug: `${version}/${repo}/index` },
+        props: { kind: 'index', version, repo, label: repoLabel(repo), packages: pkgs },
+      });
+    }
+    const tree = loadTree(version);
+    if (tree) {
+      paths.push({
+        params: { slug: `${version}/BiocViews` },
+        props: { kind: 'biocviews', version, tree },
+      });
+    }
+  }
+  return paths;
+}
+
+const props = Astro.props;
+const titles = {
+  detail: () => props.name,
+  index: () => `${props.version} ${props.label} Packages`,
+  biocviews: () => `${props.version} Package Categories`,
+};
+---
+<Site title={titles[props.kind]()} description={props.kind === 'detail' ? props.pkg.Title : undefined}>
+  {props.kind === 'detail' && (
+    <PackageDetail pkg={props.pkg} name={props.name} version={props.version} repo={props.repo} />
+  )}
+  {props.kind === 'index' && (
+    <PackageIndex version={props.version} repo={props.repo} label={props.label} packages={props.packages} />
+  )}
+  {props.kind === 'biocviews' && <BiocViews version={props.version} tree={props.tree} />}
+</Site>

@@ -1,0 +1,111 @@
+---
+/**
+ * Check results for one universe, from the bioc-prop data plane: the latest
+ * observation's `_jobs` (one check per config), plus the propagation index so
+ * every row shows whether the gate let this version through. Legacy
+ * checkResults never had an equivalent page here -- this is new work, not a
+ * port (ADR 0008).
+ */
+import Next from '../../../layouts/Next.astro';
+import { UNIVERSES, latestObservation, propIndex, severity } from '../../../lib/prop.js';
+
+export async function getStaticPaths() {
+  return UNIVERSES.map((u) => ({ params: { universe: u } }));
+}
+
+const { universe } = Astro.params;
+const [obs, index] = await Promise.all([latestObservation(universe), propIndex(universe)]);
+
+// Column order: the gate's own config first, then alphabetical.
+const configs = [...new Set(obs.flatMap((p) => (p._jobs ?? []).map((j) => j.config)))].sort(
+  (a, b) => (a === 'bioc-checks' ? -1 : b === 'bioc-checks' ? 1 : a.localeCompare(b)),
+);
+
+const rows = obs
+  .map((p) => {
+    const byConfig = Object.fromEntries((p._jobs ?? []).map((j) => [j.config, j]));
+    const worst = Math.min(
+      p._status === 'success' ? 4 : 0,
+      ...(p._jobs ?? []).map((j) => severity(j.check)),
+    );
+    return { p, byConfig, worst, prop: index[p.Package] };
+  })
+  .sort((a, b) => a.worst - b.worst || a.p.Package.localeCompare(b.p.Package));
+
+const counts = {};
+for (const { p, byConfig } of rows)
+  for (const c of configs) {
+    const s = p._status !== 'success' ? 'no build' : (byConfig[c]?.check ?? '—');
+    (counts[c] ??= {})[s] = ((counts[c] ??= {})[s] ?? 0) + 1;
+  }
+
+const cls = (check) =>
+  `st-${['error', 'warning', 'note', 'ok'][severity(check)] ?? 'ok'}`;
+---
+<Next title={`Check results — ${universe}`}>
+  <h1>Check results: {universe}</h1>
+  <p class="preview-note">
+    Preview page. Data: latest bioc-prop observation ({obs.length} packages) and
+    propagation index. Sorted worst-first.
+  </p>
+
+  <table class="check-summary">
+    <thead><tr><th>config</th>{Object.keys(counts[configs[0]] ?? {}).length > 0 && <th>counts</th>}</tr></thead>
+    <tbody>
+      {configs.map((c) => (
+        <tr>
+          <td>{c}</td>
+          <td>
+            {Object.entries(counts[c] ?? {})
+              .sort()
+              .map(([s, n]) => `${s}: ${n}`)
+              .join(' · ')}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  <div class="check-matrix-wrap">
+    <table class="check-matrix">
+      <thead>
+        <tr>
+          <th>package</th>
+          <th>version</th>
+          <th>propagated</th>
+          <th>build</th>
+          {configs.map((c) => <th>{c}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(({ p, byConfig, prop }) => (
+          <tr id={p.Package}>
+            <td><a href={`/next/${universe}/package/${p.Package}.html`}>{p.Package}</a></td>
+            <td>{p.Version}</td>
+            <td class={prop ? 'st-ok' : 'st-none'}>
+              {prop ? (prop.version === p.Version ? '✓' : prop.version) : '—'}
+            </td>
+            <td class={p._status === 'success' ? 'st-ok' : 'st-error'}>{p._status}</td>
+            {configs.map((c) => {
+              const j = byConfig[c];
+              return <td class={j ? cls(j.check) : 'st-none'}>{j?.check ?? '—'}</td>;
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+</Next>
+
+<style>
+  .preview-note { color: var(--muted); }
+  table { border-collapse: collapse; font-size: 0.85rem; }
+  th, td { border: 1px solid var(--border); padding: 0.2em 0.5em; text-align: left; }
+  .check-summary { margin-bottom: 1em; }
+  .check-matrix-wrap { overflow-x: auto; }
+  .st-error { background: var(--err-bg); color: var(--err-fg); }
+  .st-warning { background: var(--warn-bg); color: var(--warn-fg); }
+  .st-note { background: var(--note-bg); color: var(--note-fg); }
+  .st-ok { background: var(--ok-bg); color: var(--ok-fg); }
+  .st-none { color: var(--muted); }
+</style>

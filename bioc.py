@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""bioc — one entry point for the data pipeline that feeds the Astro build.
+
+Every subcommand fetches from a primary source and writes into `astro/data/`,
+which is the seam: the pipeline decides *where data comes from*, the Astro build
+decides *how it is rendered*, and neither knows the other's business.
+
+    ./bioc.py packages --bioc 3.23        packages.json, from r-universe + tarballs
+    ./bioc.py tree     --bioc 3.23        tree.json, from the biocViews vocabulary
+    ./bioc.py content                     prose pages, from the site's git repo
+    ./bioc.py fetch-site                  clone/update that git repo
+    ./bioc.py all      --bioc 3.23        everything above, in order
+
+Run `just` for the composite tasks that also drive the Astro build.
+"""
+
+import argparse
+import os
+import subprocess
+import sys
+
+REPO = os.path.dirname(os.path.abspath(__file__))
+SITE_REPO = os.path.join(REPO, ".cache", "bioconductor.org")
+SITE_GIT = "https://github.com/Bioconductor/bioconductor.org"
+DATA = os.path.join(REPO, "astro", "data")
+
+
+def cmd_fetch_site(args):
+    """Clone or update the site's own source repository -- a primary source for
+    every hand-written page, and unrelated to the hosts being retired."""
+    if os.path.isdir(os.path.join(SITE_REPO, ".git")):
+        print("[fetch-site] updating %s" % SITE_REPO, file=sys.stderr)
+        subprocess.check_call(["git", "-C", SITE_REPO, "pull", "--ff-only", "--depth", "1"])
+    else:
+        os.makedirs(os.path.dirname(SITE_REPO), exist_ok=True)
+        print("[fetch-site] cloning %s" % SITE_GIT, file=sys.stderr)
+        subprocess.check_call(["git", "clone", "--depth", "1", SITE_GIT, SITE_REPO])
+    return 0
+
+
+def cmd_content(args):
+    from pipeline import content
+    content.write(args.repo, args.out)
+    return 0
+
+
+def cmd_packages(args):
+    from pipeline import packages
+    return packages.main(args.rest + ["--bioc", args.bioc, "--out", args.out])
+
+
+def cmd_tree(args):
+    from pipeline import tree
+    return tree.main(args.rest + ["--bioc", args.bioc, "--json-dir", args.out,
+                                  "--out", os.path.join(args.out, args.bioc, "tree.json")])
+
+
+def cmd_coverage(args):
+    from pipeline import coverage
+    return coverage.main(args.rest)
+
+
+def cmd_assets(args):
+    """Copy the site's static assets into Astro's public/ -- a dumb copy, which
+    is exactly what upstream's Rakefile does (rsync, no bundler)."""
+    src = os.path.join(args.repo, "assets")
+    dest = os.path.join(REPO, "astro", "public")
+    if not os.path.isdir(src):
+        raise SystemExit("no assets at %s -- run `fetch-site` first" % src)
+    os.makedirs(dest, exist_ok=True)
+    # Only the directories the pages actually reference. The rest of assets/ is
+    # per-release package archives, tens of megabytes that R2 already serves.
+    for sub in ("style", "images", "js"):
+        subprocess.check_call(["rsync", "-a", "--delete",
+                               os.path.join(src, sub) + "/", os.path.join(dest, sub) + "/"])
+    for f in ("favicon.ico", "robots.txt"):
+        p = os.path.join(src, f)
+        if os.path.exists(p):
+            subprocess.check_call(["cp", p, dest])
+    print("[assets] copied style, images, js -> %s" % dest, file=sys.stderr)
+    return 0
+
+
+def cmd_all(args):
+    for fn in (cmd_fetch_site, cmd_assets, cmd_content):
+        rc = fn(args) or 0
+        if rc:
+            return rc
+    for bioc in args.bioc.split(","):
+        args.bioc = bioc.strip()
+        for fn in (cmd_packages, cmd_tree):
+            rc = fn(args) or 0
+            if rc:
+                return rc
+    return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(prog="bioc", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    def add(name, fn, help_, bioc=False, repo=False):
+        p = sub.add_parser(name, help=help_)
+        p.set_defaults(fn=fn)
+        p.add_argument("--out", default=DATA)
+        if bioc:
+            p.add_argument("--bioc", default="3.23")
+            p.set_defaults(rest=[])
+        if repo:
+            p.add_argument("--repo", default=SITE_REPO)
+        return p
+
+    add("fetch-site", cmd_fetch_site, "clone or update Bioconductor/bioconductor.org")
+    add("content", cmd_content, "prose pages -> astro/data/site/", repo=True)
+    add("assets", cmd_assets, "static assets -> astro/public/", repo=True)
+    add("packages", cmd_packages, "packages.json from r-universe + tarballs", bioc=True)
+    add("tree", cmd_tree, "tree.json from the biocViews vocabulary", bioc=True)
+    c = add("coverage", cmd_coverage, "how much of the real site does the build reproduce?")
+    c.set_defaults(rest=[])
+    p = add("all", cmd_all, "fetch-site, assets, content, then packages+tree",
+            bioc=True, repo=True)
+    p.set_defaults(bioc="3.23,3.24")
+
+    # Unrecognised flags are forwarded to the underlying module rather than
+    # rejected, so `bioc.py packages --universe bioc-devel` reaches
+    # pipeline/packages.py without every flag needing to be declared twice.
+    args, unknown = ap.parse_known_args()
+    if unknown:
+        if not hasattr(args, "rest"):
+            ap.error("unrecognized arguments: %s" % " ".join(unknown))
+        args.rest = unknown
+    sys.exit(args.fn(args) or 0)
+
+
+if __name__ == "__main__":
+    main()

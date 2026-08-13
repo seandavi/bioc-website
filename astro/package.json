@@ -1,0 +1,14 @@
+{
+  "name": "bioconductor-astro",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "astro build",
+    "dev": "astro dev",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "^5.0.0",
+    "marked": "^18.0.7"
+  }
+}

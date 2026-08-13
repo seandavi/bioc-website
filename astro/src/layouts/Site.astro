@@ -1,0 +1,70 @@
+---
+/**
+ * The site shell, ported from the nanoc `default` layout + `_sitehead` partial.
+ *
+ * Deliberately a faithful port rather than an improvement: the point of this
+ * build is to measure how much of the real site can be reproduced from primary
+ * sources, and that measurement is only meaningful if the chrome matches. The
+ * stylesheet list is upstream's, in upstream's order, because CSS is
+ * order-dependent and reordering it would produce differences that look like
+ * rendering bugs.
+ *
+ * Two deliberate divergences, both narrow:
+ *  - jQuery is loaded from the vendored /js/jquery.js on every page. Upstream
+ *    pulls jQuery 1.5.1 (2011) off ajax.googleapis.com on the `rebase` path.
+ *    Same library, one fewer third-party origin.
+ *  - highlight.js is not loaded from cdnjs. Code highlighting is done at build
+ *    time instead, so no page depends on a CDN being up to render.
+ */
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+const { title, description, fullwidth = false, bodyClass } = Astro.props;
+
+const DESCRIPTION =
+  'The Bioconductor project aims to develop and share open source software for ' +
+  'precise and repeatable analysis of biological data. We foster an inclusive and ' +
+  'collaborative community of developers and data scientists.';
+
+// Upstream's order, verbatim. base -> components -> sections -> pages.
+const STYLES = [
+  'existing.css',
+  'base/fonts.css', 'base/colors.css', 'base/typography.css', 'base/layout.css',
+  'components/code.css', 'components/gallery.css', 'components/blockquote.css',
+  'components/lists.css', 'components/breadcrumbs.css', 'components/buttons.css',
+  'components/tables.css',
+  'sections/announcement.css', 'sections/hero.css', 'sections/header.css',
+  'sections/sidebar.css', 'sections/footer.css',
+  'pages/home.css', 'pages/get-started.css', 'pages/learn-and-dev.css',
+  'pages/about.css', 'pages/packages.css', 'pages/orcid.css',
+];
+
+const SCRIPTS = [
+  'jquery.js', 'jquery.tools.min.js', 'bioconductor.js', 'jquery.corner.js',
+  'jquery.timeago.js', 'bioc-style.js', 'versions.js', 'sidebar.js',
+];
+---
+<!DOCTYPE html>
+<html dir="ltr" lang="en-US">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="all" />
+    <meta name="description" content={description || DESCRIPTION} />
+    <title>{title ? `Bioconductor - ${title}` : 'Bioconductor'}</title>
+    {STYLES.map((s) => <link rel="stylesheet" type="text/css" href={`/style/${s}`} />)}
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  </head>
+  <body class={bodyClass}>
+    <Header />
+    <main>
+      <div class={fullwidth ? undefined : 'container'}>
+        <section class="content">
+          <slot />
+        </section>
+      </div>
+    </main>
+    <Footer />
+    {SCRIPTS.map((s) => <script is:inline type="text/javascript" src={`/js/${s}`}></script>)}
+  </body>
+</html>

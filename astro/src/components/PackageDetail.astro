@@ -1,0 +1,133 @@
+---
+/**
+ * A package landing page. The markup mirrors upstream's
+ * `_bioc_views_package_detail` partial closely enough that
+ * style/pages/packages.css applies: `<details>` + `summary.package-details`
+ * for the collapsible sections, and a details table for the metadata.
+ */
+import { depName, asArray } from '../lib/packages.js';
+
+const { pkg, name, version, repo } = Astro.props;
+
+// Cross-repo links are not resolved: a dependency named here may live in any of
+// the four repositories or on CRAN, and guessing wrong produces a confident 404.
+// Staying within version+repo matches the current site's behaviour.
+const linkDep = (d) => `/packages/${version}/${repo}/html/${depName(d)}.html`;
+
+const depFields = [
+  ['Depends', pkg.Depends], ['Imports', pkg.Imports], ['LinkingTo', pkg.LinkingTo],
+  ['Suggests', pkg.Suggests], ['Enhances', pkg.Enhances],
+];
+const revFields = [
+  ['Depends On Me', pkg.dependsOnMe], ['Imports Me', pkg.importsMe],
+  ['Suggests Me', pkg.suggestsMe], ['Links To Me', pkg.linksToMe],
+];
+const vignettes = asArray(pkg.vignettes);
+const vignetteTitles = asArray(pkg.vignetteTitles);
+const hasDeps = depFields.some(([, l]) => asArray(l).length > 0);
+const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
+
+const repoLabels = {
+  'bioc': 'Software', 'data/annotation': 'Annotation',
+  'data/experiment': 'Experiment Data', 'workflows': 'Workflow',
+};
+---
+<ul class="breadcrumbs">
+  <li><a href="/">Home</a></li>
+  <li><a href={`/packages/${version}/BiocViews.html`}>Bioconductor {version}</a></li>
+  <li><a href={`/packages/${version}/${repo}/`}>{repoLabels[repo] ?? repo}</a></li>
+  <li>{name}</li>
+</ul>
+
+<h1>{name}</h1>
+<p class="package-title">{pkg.Title}</p>
+<p class="version">Bioconductor version: {version} &middot; Package version: {pkg.Version}</p>
+
+{pkg.Description && <p class="description">{pkg.Description}</p>}
+
+<h2>Installation</h2>
+<pre><code>{`if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("${name}")`}</code></pre>
+
+<h2>Details</h2>
+<table class="details">
+  <tbody>
+    {pkg.Maintainer && <tr><td>Maintainer</td><td>{pkg.Maintainer}</td></tr>}
+    {pkg.Author && <tr><td>Author</td><td>{pkg.Author}</td></tr>}
+    {pkg.License && <tr><td>License</td><td>{pkg.License}</td></tr>}
+    {pkg.URL && <tr><td>URL</td><td><a href={pkg.URL}>{pkg.URL}</a></td></tr>}
+    {pkg.BugReports && <tr><td>Bug Reports</td><td><a href={pkg.BugReports}>{pkg.BugReports}</a></td></tr>}
+    {pkg.SystemRequirements && <tr><td>System Requirements</td><td>{pkg.SystemRequirements}</td></tr>}
+    {pkg.PackageStatus && <tr><td>Status</td><td>{pkg.PackageStatus}</td></tr>}
+    {pkg.Rank && <tr><td>Downloads rank</td><td>{pkg.Rank}</td></tr>}
+    {pkg.git_branch && <tr><td>Source branch</td><td>{pkg.git_branch}</td></tr>}
+    {pkg.biocViews && (
+      <tr><td>biocViews</td><td>{asArray(pkg.biocViews).join(', ')}</td></tr>
+    )}
+  </tbody>
+</table>
+
+{vignettes.length > 0 && (
+  <>
+    <h2>Documentation</h2>
+    <ul class="vignettes">
+      {vignettes.map((v, i) => (
+        <li>
+          <a href={`/packages/${version}/${repo}/vignettes/${name}/inst/doc/${v.split('/').pop()}`}>
+            {vignetteTitles[i] ?? v.split('/').pop()}
+          </a>
+        </li>
+      ))}
+    </ul>
+  </>
+)}
+
+{pkg['source.ver'] && (
+  <>
+    <h2>Download</h2>
+    <ul class="downloads">
+      <li><a href={`/packages/${version}/${repo}/${pkg['source.ver']}`}>Source package</a></li>
+      {pkg['win.binary.ver'] && (
+        <li><a href={`/packages/${version}/${repo}/${pkg['win.binary.ver']}`}>Windows binary</a></li>
+      )}
+      {pkg['mac.binary.sonoma-arm64.ver'] && (
+        <li><a href={`/packages/${version}/${repo}/${pkg['mac.binary.sonoma-arm64.ver']}`}>macOS arm64 binary</a></li>
+      )}
+      {pkg['mac.binary.big-sur-x86_64.ver'] && (
+        <li><a href={`/packages/${version}/${repo}/${pkg['mac.binary.big-sur-x86_64.ver']}`}>macOS x86_64 binary</a></li>
+      )}
+    </ul>
+  </>
+)}
+
+{hasDeps && (
+  <details class="package-deps" open>
+    <summary class="package-details">Dependencies</summary>
+    {depFields.map(([label, list]) =>
+      asArray(list).length > 0 && (
+        <p class="deps"><strong>{label}:</strong>{' '}
+          {asArray(list).map((d, i) => (
+            <>{i > 0 && ', '}<a href={linkDep(d)}>{d}</a></>
+          ))}
+        </p>
+      )
+    )}
+  </details>
+)}
+
+{hasRev && (
+  <details class="package-revdeps">
+    <summary class="package-details">Reverse dependencies</summary>
+    {revFields.map(([label, list]) =>
+      asArray(list).length > 0 && (
+        <p class="revdeps"><strong>{label}</strong> ({asArray(list).length}):{' '}
+          {asArray(list).map((d, i) => (
+            <>{i > 0 && ', '}<a href={linkDep(d)}>{d}</a></>
+          ))}
+        </p>
+      )
+    )}
+  </details>
+)}

@@ -1,0 +1,26 @@
+---
+/**
+ * The events block, replacing nanoc's `_top_events` partial.
+ *
+ * That partial looped over build-time event items; the same records are in
+ * `astro/data/site/events.json`, extracted from the 171 metadata-only YAML
+ * files under `content/help/events/`. Markup follows the original so
+ * style/sections/*.css still applies.
+ */
+import { eventDate } from '../lib/content.js';
+
+const { events = [] } = Astro.props;
+---
+{events.map((e) => (
+  <a href={e.link?.url ?? e.url}>
+    <div class="event-card-container">
+      <div class="event-card">
+        <p class="format-bold">{e.title}</p>
+        <div class="event-date-location">
+          <p class="text-small">{eventDate(e)}</p>
+          <p class="text-small">{e.location}</p>
+        </div>
+      </div>
+    </div>
+  </a>
+))}

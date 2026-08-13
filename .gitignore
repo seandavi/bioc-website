@@ -1,0 +1,4 @@
+# Upstream site repo, cloned by `just fetch-site`. Regenerate, do not commit.
+.cache/
+__pycache__/
+*.pyc

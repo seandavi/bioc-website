@@ -1,0 +1,27 @@
+---
+/** Wayfinding for the next-gen preview pages (bioc-prop-fed). */
+import Next from '../../layouts/Next.astro';
+import { UNIVERSES, propIndex, latestObservation } from '../../lib/prop.js';
+
+const universes = await Promise.all(
+  UNIVERSES.map(async (u) => {
+    const [index, obs] = await Promise.all([propIndex(u), latestObservation(u)]);
+    return { u, propagated: Object.keys(index).length, observed: obs.length };
+  }),
+);
+---
+<Next title="Next-gen preview">
+  <h1>Next-gen preview</h1>
+  <p>
+    Pages rendered from the bioc-prop data plane (propagation gate over
+    r-universe builds), not from the legacy docroot.
+  </p>
+  <ul>
+    {universes.map(({ u, propagated, observed }) => (
+      <li>
+        <strong>{u}</strong> — {observed} packages observed, {propagated} propagated ·
+        <a href={`/next/${u}/checkResults.html`}> check results</a>
+      </li>
+    ))}
+  </ul>
+</Next>

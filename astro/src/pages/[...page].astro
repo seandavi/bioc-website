@@ -1,0 +1,59 @@
+---
+/**
+ * Prose pages, from the site's own source repository.
+ *
+ * The pipeline (`pipeline/content.py`) has already done the awkward parts:
+ * nanoc keeps front matter in a sibling `.yaml`, and much of the page bodies
+ * carry ERB. By the time the data reaches here it is a flat list of
+ * {url, format, title, body, hero}, with ERB either resolved or reported
+ * unresolved. This route does not know the source was nanoc.
+ *
+ * Bodies come in two formats. Markdown goes through `marked`; `.html` bodies
+ * are emitted as-is. They are NOT both run through the markdown renderer: a
+ * blank line inside a block-level HTML element terminates the HTML block in
+ * CommonMark and the remainder gets markdown-processed, silently mangling the
+ * page. Upstream has 329 `.html` bodies, so that would not be a rare edge.
+ */
+import { marked } from 'marked';
+import Site from '../layouts/Site.astro';
+import Events from '../components/Events.astro';
+import { loadPages, loadEvents, topEvents } from '../lib/content.js';
+
+export async function getStaticPaths() {
+  return loadPages()
+    .filter((p) => p.renderable)
+    .map((p) => ({
+      // '/' -> 'index', '/about/' -> 'about/index'. Astro is configured with
+      // build.format 'file', which emits <slug>.html, so naming the slug
+      // '<path>/index' produces the '<path>/index.html' the Worker resolves
+      // trailing-slash URLs to (see worker/src/keys.ts candidates()).
+      params: { page: p.url === '/' ? 'index' : p.url.replace(/^\/|\/$/g, '') + '/index' },
+      props: { page: p },
+    }));
+}
+
+const { page } = Astro.props;
+
+marked.setOptions({ gfm: true, breaks: false });
+const html = page.format === 'md' ? await marked.parse(page.body) : page.body;
+
+// The pipeline leaves `<!--slot:events-->` where a data-driven partial stood.
+// Split on it so the events component renders as real markup rather than being
+// injected as a string.
+const SLOT = '<!--slot:events-->';
+const parts = html.split(SLOT);
+const events = parts.length > 1 ? topEvents(loadEvents()) : [];
+---
+<Site title={page.title} description={page.meta?.description} fullwidth={page.fullwidth}>
+  {page.hero && (
+    <section class="hero">
+      <div class="container"><Fragment set:html={page.hero} /></div>
+    </section>
+  )}
+  {parts.map((chunk, i) => (
+    <>
+      <Fragment set:html={chunk} />
+      {i < parts.length - 1 && <Events events={events} />}
+    </>
+  ))}
+</Site>

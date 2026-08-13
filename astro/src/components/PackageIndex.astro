@@ -1,0 +1,38 @@
+---
+/**
+ * The per-repository package listing: /packages/<version>/<repo>/index.html
+ *
+ * Upstream renders this from the `_pkg_idx` partial as a plain three-column
+ * table with alternating `row_odd` / `row_even` classes. Those class names are
+ * load-bearing -- style/components/tables.css targets them -- so they are kept
+ * rather than replaced with :nth-child, which would look equivalent and quietly
+ * lose the striping on any release whose CSS has not been updated.
+ */
+const { version, repo, label, packages } = Astro.props;
+const names = Object.keys(packages).sort((a, b) =>
+  a.toLowerCase().localeCompare(b.toLowerCase()));
+
+// Maintainer is shown without the angle-bracket address, matching upstream.
+const stripEmail = (m) => String(m || '').replace(/<[^>]*>/g, '').trim();
+---
+<ul class="breadcrumbs">
+  <li><a href="/">Home</a></li>
+  <li><a href={`/packages/${version}/BiocViews.html`}>Bioconductor {version}</a></li>
+  <li>{version} {label} Packages</li>
+</ul>
+
+<h1>Bioconductor {label} Packages</h1>
+<p>Bioconductor version: {version} &middot; {names.length} packages</p>
+
+<div class="do_not_rebase">
+  <table>
+    <tr><th>Package</th><th>Maintainer</th><th>Title</th></tr>
+    {names.map((name, i) => (
+      <tr class={i % 2 === 0 ? 'row_odd' : 'row_even'}>
+        <td><a href={`html/${name}.html`}>{name}</a></td>
+        <td>{stripEmail(packages[name].Maintainer)}</td>
+        <td>{packages[name].Title}</td>
+      </tr>
+    ))}
+  </table>
+</div>

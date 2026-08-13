@@ -1,0 +1,323 @@
+---
+/**
+ * Next-gen package landing page: one page per package the propagation gate has
+ * let through. Clean-slate design (Next layout, not the legacy chrome), IA
+ * ordered by visitor intent: identify -> install -> learn -> trust -> detail.
+ * Version truth is the prop index; downloads are the gate's content-addressed
+ * artifacts; docs link to r-universe's live article URLs.
+ */
+import Next from '../../../../layouts/Next.astro';
+import { depName } from '../../../../lib/packages.js';
+import {
+  UNIVERSES,
+  casUrl,
+  latestObservation,
+  metadata,
+  propIndex,
+  severity,
+  toContractRecord,
+} from '../../../../lib/prop.js';
+
+export async function getStaticPaths() {
+  const paths = [];
+  for (const universe of UNIVERSES) {
+    const [index, meta, obs] = await Promise.all([
+      propIndex(universe),
+      metadata(universe),
+      latestObservation(universe),
+    ]);
+    const jobs = new Map(obs.map((p) => [p.Package, p._jobs ?? []]));
+    const known = new Set(Object.keys(index));
+    for (const [name, entry] of Object.entries(index)) {
+      const m = meta.get(name);
+      if (!m) continue; // dropped upstream since propagation; index-only, no page
+      const rec = toContractRecord(m, entry);
+      // Dependency names that have their own /next/ page, so links never 404.
+      const linkable = [
+        ...new Set(
+          ['Depends', 'Imports', 'LinkingTo', 'Suggests', 'Enhances']
+            .flatMap((f) => rec[f] ?? [])
+            .map(depName)
+            .filter((d) => known.has(d)),
+        ),
+      ];
+      paths.push({
+        params: { universe, pkg: name },
+        props: { entry, rec, jobs: jobs.get(name) ?? [], linkable },
+      });
+    }
+  }
+  return paths;
+}
+
+const { universe, pkg } = Astro.params;
+const { entry, rec, jobs, linkable } = Astro.props;
+const canLink = new Set(linkable);
+
+const ruBase = `https://${universe}.r-universe.dev`;
+const date = (secs) => (secs ? new Date(secs * 1000).toISOString().slice(0, 10) : null);
+const compact = (n) =>
+  n == null ? null : new Intl.NumberFormat('en', { notation: 'compact' }).format(n);
+
+// One-word check verdict for the badge: the worst thing any config reported.
+const worst = jobs.length ? Math.min(...jobs.map((j) => severity(j.check))) : null;
+const VERDICT = ['error', 'warning', 'note', 'ok'];
+const verdict = worst == null ? null : VERDICT[worst];
+const cls = (check) => `st-${VERDICT[severity(check)] ?? 'ok'}`;
+
+const installCmd = `if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("${pkg}")`;
+
+const depGroups = [
+  ['Depends', rec.Depends], ['Imports', rec.Imports], ['LinkingTo', rec.LinkingTo],
+  ['Suggests', rec.Suggests], ['Enhances', rec.Enhances],
+].filter(([, l]) => (l ?? []).length > 0);
+
+const stats = [
+  [compact(rec.downloads), 'downloads / month'],
+  [compact(rec.usedby), 'dependents'],
+  [compact(rec.stars), 'GitHub stars'],
+].filter(([v]) => v != null);
+---
+<Next title={pkg} description={rec.Title}>
+  <nav class="crumbs">
+    <a href="/next/">next</a> ›
+    <a href={`/next/${universe}/checkResults.html`}>{universe}</a> ›
+    <span>{pkg}</span>
+  </nav>
+
+  <header class="pkg-head">
+    <div>
+      <h1>{pkg}</h1>
+      <p class="tagline">{rec.Title}</p>
+      <div class="badges">
+        <span class="badge ver">v{rec.Version}</span>
+        {verdict && (
+          <a class={`badge st-${verdict}`} href={`/next/${universe}/checkResults.html#${pkg}`}>
+            checks: {verdict}
+          </a>
+        )}
+        <span class="badge" title={`propagated ${entry.ts ?? ''}`}>
+          propagated {date(Date.parse(entry.ts ?? '') / 1000) ?? ''}
+        </span>
+        {rec.buildVersion && (
+          <span class="badge skew" title="the live build has moved past the propagated version">
+            build at v{rec.buildVersion}
+          </span>
+        )}
+      </div>
+    </div>
+    {stats.length > 0 && (
+      <div class="stats">
+        {stats.map(([v, label]) => (
+          <div class="stat"><b>{v}</b><span>{label}</span></div>
+        ))}
+      </div>
+    )}
+  </header>
+
+  <div class="install-card">
+    <pre><code>{installCmd}</code></pre>
+    <button class="copy" data-copy={installCmd}>Copy</button>
+  </div>
+
+  <div class="cols">
+    <div class="main">
+      {rec.Description && (
+        <section>
+          <h2>About</h2>
+          <p>{rec.Description}</p>
+        </section>
+      )}
+
+      <section>
+        <h2>Documentation</h2>
+        <ul class="doclist">
+          <li><a href={`${ruBase}/${pkg}/doc/manual.html`}>Reference manual</a></li>
+          {rec.vignettes.map((v, i) => (
+            <li>
+              <a href={`${ruBase}/articles/${pkg}/${v.split('/').pop()}`}>
+                {rec.vignetteTitles[i] ?? v.split('/').pop()}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <h2>Build &amp; check status</h2>
+        {jobs.length > 0 ? (
+          <div class="chips">
+            {jobs.map((j) => (
+              <a class={`chip ${cls(j.check)}`} href={`/next/${universe}/checkResults.html#${pkg}`}>
+                <b>{j.config}</b> {j.check}
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p class="muted">No check jobs in the latest observation.</p>
+        )}
+      </section>
+
+      <section>
+        <h2>Downloads</h2>
+        <table class="artifacts">
+          <tbody>
+            {(entry.artifacts ?? []).map((a) => (
+              <tr>
+                <td><a href={casUrl(universe, a)}>{a.file}</a></td>
+                <td class="muted">{a.os === 'src' ? 'source' : `${a.os} · R ${a.r}`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      {depGroups.length > 0 && (
+        <section>
+          <h2>Dependencies</h2>
+          {depGroups.map(([label, list]) => (
+            <p class="deps">
+              <strong>{label}</strong>{' '}
+              {list.map((d, i) => (
+                <>
+                  {i > 0 && ', '}
+                  {canLink.has(depName(d)) ? (
+                    <a href={`/next/${universe}/package/${depName(d)}.html`}>{d}</a>
+                  ) : (
+                    <span>{d}</span>
+                  )}
+                </>
+              ))}
+            </p>
+          ))}
+        </section>
+      )}
+    </div>
+
+    <aside class="facts">
+      <dl>
+        {rec.Maintainer && <><dt>Maintainer</dt><dd>{rec.Maintainer.replace(/\s+/g, ' ')}</dd></>}
+        {rec.Author && <><dt>Authors</dt><dd>{rec.Author.replace(/\s+/g, ' ')}</dd></>}
+        {rec.License && <><dt>License</dt><dd>{rec.License}</dd></>}
+        {rec.updated && <><dt>Last commit</dt><dd>{date(rec.updated)}</dd></>}
+        {rec.SystemRequirements && (
+          <><dt>System requirements</dt><dd>{rec.SystemRequirements}</dd></>
+        )}
+        <dt>Links</dt>
+        <dd class="linklist">
+          {rec.URL &&
+            String(rec.URL).split(/[,\s]+/).filter(Boolean).map((u) => (
+              <a href={u}>{u.replace(/^https?:\/\//, '')}</a>
+            ))}
+          {rec.BugReports && <a href={rec.BugReports}>bug reports</a>}
+          <a href={`${ruBase}/${pkg}`}>r-universe</a>
+        </dd>
+        {(rec.biocViews ?? []).length > 0 && (
+          <>
+            <dt>biocViews</dt>
+            <dd class="tags">
+              {rec.biocViews.map((v) => <span class="tag">{v}</span>)}
+            </dd>
+          </>
+        )}
+      </dl>
+    </aside>
+  </div>
+</Next>
+
+<script>
+  // Reactivity layered over the content (#79): the page is complete without it.
+  for (const btn of document.querySelectorAll('button[data-copy]')) {
+    btn.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(btn.dataset.copy);
+      btn.textContent = 'Copied';
+      setTimeout(() => (btn.textContent = 'Copy'), 1500);
+    });
+  }
+</script>
+
+<style>
+  .crumbs { font-size: 0.85rem; color: var(--muted); margin-bottom: 1rem; }
+  .crumbs span { color: var(--fg); }
+
+  .pkg-head {
+    display: flex; flex-wrap: wrap; justify-content: space-between;
+    align-items: flex-start; gap: 1rem; margin-bottom: 1.25rem;
+  }
+  h1 { margin: 0; font-size: 2rem; letter-spacing: -0.01em; }
+  .tagline { margin: 0.25rem 0 0.75rem; font-size: 1.1rem; color: var(--muted); max-width: 42rem; }
+
+  .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .badge {
+    font-size: 0.78rem; font-weight: 600; border-radius: 999px;
+    padding: 0.15em 0.7em; border: 1px solid var(--border);
+    background: var(--card); color: var(--fg);
+  }
+  .badge.ver { border-color: var(--accent); color: var(--accent); }
+  .badge.skew { border-style: dashed; color: var(--muted); }
+  a.badge:hover { text-decoration: none; filter: brightness(0.96); }
+
+  .stats { display: flex; gap: 1.5rem; }
+  .stat { text-align: right; }
+  .stat b { display: block; font-size: 1.3rem; color: var(--accent); }
+  .stat span { font-size: 0.75rem; color: var(--muted); }
+
+  .install-card {
+    position: relative; background: var(--card);
+    border: 1px solid var(--border); border-radius: 8px;
+    margin-bottom: 1.75rem;
+  }
+  .install-card pre { margin: 0; padding: 0.9rem 1rem; overflow-x: auto; font-size: 0.88rem; }
+  .copy {
+    position: absolute; top: 0.5rem; right: 0.5rem;
+    font: 600 0.75rem system-ui; color: var(--accent);
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.25em 0.8em; cursor: pointer;
+  }
+  .copy:hover { border-color: var(--accent); }
+
+  .cols { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 2.5rem; }
+  @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
+
+  section { margin-bottom: 1.75rem; }
+  h2 {
+    font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--muted); border-bottom: 1px solid var(--border);
+    padding-bottom: 0.3rem; margin: 0 0 0.6rem;
+  }
+  .muted { color: var(--muted); }
+  .doclist { margin: 0; padding-left: 1.2rem; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .chip {
+    font-size: 0.78rem; border-radius: 6px; padding: 0.25em 0.6em;
+    border: 1px solid var(--border); color: inherit;
+  }
+  .chip b { font-weight: 600; }
+  .chip:hover { text-decoration: none; filter: brightness(0.96); }
+  .st-ok { background: var(--ok-bg); color: var(--ok-fg); }
+  .st-note { background: var(--note-bg); color: var(--note-fg); }
+  .st-warning { background: var(--warn-bg); color: var(--warn-fg); }
+  .st-error { background: var(--err-bg); color: var(--err-fg); }
+
+  .artifacts { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+  .artifacts td { padding: 0.3em 0.6em 0.3em 0; border-bottom: 1px solid var(--border); }
+
+  .deps { font-size: 0.9rem; margin: 0.35rem 0; }
+
+  .facts dl { margin: 0; font-size: 0.88rem; }
+  .facts dt {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); margin-top: 0.9rem;
+  }
+  .facts dd { margin: 0.15rem 0 0; }
+  .linklist a { display: block; overflow-wrap: anywhere; }
+  .tags { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .tag {
+    font-size: 0.72rem; background: var(--card); border: 1px solid var(--border);
+    border-radius: 999px; padding: 0.1em 0.6em; color: var(--muted);
+  }
+</style>
