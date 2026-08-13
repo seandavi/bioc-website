@@ -37,9 +37,17 @@ pipeline-free curl setup for the parity pages.
   (`just coverage`), not assumed.
 - `/next/` track: check-results and package pages rendered from the propagation
   data plane. New work — the legacy site never built check pages.
-- Not here yet: CI build + PR previews, publish-to-R2 deploy, and the one-time
-  markdown import of prose content (after which content changes by PR in this
-  repo).
+- CI (`.github/workflows/site.yml`): every PR is built and published to
+  `preview/pr-<n>/` in R2, served at
+  `https://bioc-dev.cancerdatasci.org/_pr/<n>/` (URL posted as a PR comment,
+  build deleted when the PR closes). Pushes to `main` publish an immutable
+  `site/<sha>/` build and update the `site/latest` pointer. The Worker in the
+  private infra repo decides what is actually served. Builds read a data
+  snapshot from `_ci/site-data.tar.zst` in the bucket — refresh it by running
+  the pipeline locally and re-uploading (`tar -C astro -cf - data public |
+  zstd | rclone rcat r2:bioc-site/_ci/site-data.tar.zst`).
+- Not here yet: the one-time markdown import of prose content (after which
+  content changes by PR in this repo).
 
 This repo was extracted (fresh history, 2026-08) from the private
 bioconductor.org-migration repo; serving infrastructure, sync tooling, and

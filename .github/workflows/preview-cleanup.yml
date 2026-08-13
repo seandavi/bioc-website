@@ -1,0 +1,21 @@
+# Delete a PR's preview build from R2 when the PR closes.
+name: preview-cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions: {}
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: auto
+  AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+  AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - run: aws s3 rm --endpoint-url ${{ secrets.R2_ENDPOINT }} --recursive "s3://bioc-site/preview/pr-${{ github.event.number }}"
