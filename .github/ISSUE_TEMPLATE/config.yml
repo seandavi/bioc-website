@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Bioconductor support site
+    url: https://support.bioconductor.org
+    about: Questions about using Bioconductor packages belong on the support site, not this repo.
+  - name: Legacy site content (current bioconductor.org)
+    url: https://github.com/Bioconductor/bioconductor.org
+    about: Prose/content fixes for the live site still go to the legacy repo until the content import lands here.

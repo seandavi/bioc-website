@@ -1,0 +1,19 @@
+name: Bug report
+description: A page renders wrong, a build fails, or the pipeline misbehaves
+labels: [bug]
+body:
+  - type: input
+    id: url
+    attributes:
+      label: Affected page or command
+      description: URL of the broken page, or the command that failed
+      placeholder: /packages/3.24/bioc/html/limma.html — or — ./bioc.py packages --bioc 3.24
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include error output if a build or pipeline run failed. If a page differs from the legacy site, link both.
+    validations:
+      required: true
