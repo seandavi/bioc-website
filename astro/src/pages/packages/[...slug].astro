@@ -19,6 +19,17 @@ import { versions, reposFor, loadRepo, loadTree, repoLabel } from '../../lib/pac
 
 export async function getStaticPaths() {
   const paths = [];
+  // The newest version present is devel and its predecessor the release --
+  // only that live pair gets the channel chrome on the BiocViews page;
+  // archival releases get a plain version header and no toggle.
+  const byNum = versions().slice().sort((a, b) => {
+    const [am, an] = a.split('.').map(Number);
+    const [bm, bn] = b.split('.').map(Number);
+    return am - bm || an - bn;
+  });
+  const devel = byNum[byNum.length - 1];
+  const release = byNum[byNum.length - 2];
+  const channelOf = (v) => (v === devel ? 'devel' : v === release ? 'release' : null);
   for (const version of versions()) {
     for (const repo of reposFor(version)) {
       const pkgs = loadRepo(version, repo);
@@ -38,9 +49,16 @@ export async function getStaticPaths() {
     }
     const tree = loadTree(version);
     if (tree) {
+      const channel = channelOf(version);
+      const other =
+        channel === 'devel'
+          ? { version: release, channel: 'release' }
+          : channel === 'release'
+            ? { version: devel, channel: 'devel' }
+            : null;
       paths.push({
         params: { slug: `${version}/BiocViews` },
-        props: { kind: 'biocviews', version, tree },
+        props: { kind: 'biocviews', version, tree, channel, other },
       });
     }
   }
@@ -61,5 +79,7 @@ const titles = {
   {props.kind === 'index' && (
     <PackageIndex version={props.version} repo={props.repo} label={props.label} packages={props.packages} />
   )}
-  {props.kind === 'biocviews' && <BiocViews version={props.version} tree={props.tree} />}
+  {props.kind === 'biocviews' && (
+    <BiocViews version={props.version} tree={props.tree} channel={props.channel} other={props.other} />
+  )}
 </Site>

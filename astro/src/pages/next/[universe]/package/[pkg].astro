@@ -12,7 +12,7 @@ import {
   UNIVERSES,
   casUrl,
   latestObservation,
-  metadata,
+  liveSignals,
   propIndex,
   severity,
   toContractRecord,
@@ -21,17 +21,18 @@ import {
 export async function getStaticPaths() {
   const paths = [];
   for (const universe of UNIVERSES) {
-    const [index, meta, obs] = await Promise.all([
+    const [index, live, obs] = await Promise.all([
       propIndex(universe),
-      metadata(universe),
+      liveSignals(universe),
       latestObservation(universe),
     ]);
     const jobs = new Map(obs.map((p) => [p.Package, p._jobs ?? []]));
     const known = new Set(Object.keys(index));
     for (const [name, entry] of Object.entries(index)) {
-      const m = meta.get(name);
-      if (!m) continue; // dropped upstream since propagation; index-only, no page
-      const rec = toContractRecord(m, entry);
+      // Entries with no archived metadata predate the widened observer fields
+      // (or went stale upstream): index-only, no page.
+      if (!entry.meta || !Object.keys(entry.meta).length) continue;
+      const rec = toContractRecord(entry, live.get(name));
       // Dependency names that have their own /next/ page, so links never 404.
       const linkable = [
         ...new Set(

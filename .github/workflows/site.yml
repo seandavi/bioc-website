@@ -1,0 +1,91 @@
+# Build the site and publish it to R2.
+#
+#   push to main  -> s3://bioc-site/site/<sha>/     (immutable, pointer in site/latest)
+#   pull request  -> s3://bioc-site/preview/pr-<n>/ (mutable, deleted on close)
+#
+# The Worker (private infra repo) decides what is actually served; this
+# workflow only publishes builds. Data comes from a snapshot in R2, not from
+# primary sources -- refresh it with the pipeline and re-upload (see README).
+name: site
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: auto
+  # aws-cli >= 2.23 sends CRC checksums R2 rejects; only checksum when asked.
+  AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+  AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+  # R2 throws transient ServiceUnavailable under sync's concurrency.
+  AWS_MAX_ATTEMPTS: "10"
+  AWS_RETRY_MODE: adaptive
+  EP: --endpoint-url ${{ secrets.R2_ENDPOINT }}
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: astro/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: astro
+
+      - name: Pull data snapshot
+        run: aws s3 cp $EP s3://bioc-site/_ci/site-data.tar.zst - | zstd -d | tar -x -C astro
+
+      - name: Build
+        run: npm run build
+        working-directory: astro
+
+      - name: Publish preview
+        if: github.event_name == 'pull_request'
+        # Second pass only re-touches what the first left behind: sync is
+        # idempotent, and one transient failure must not fail the build.
+        run: |
+          DEST="s3://bioc-site/preview/pr-${{ github.event.number }}"
+          aws s3 sync $EP --delete --no-progress astro/dist "$DEST" ||
+            aws s3 sync $EP --delete --no-progress astro/dist "$DEST"
+
+      - name: Publish versioned build
+        if: github.event_name == 'push'
+        run: |
+          DEST="s3://bioc-site/site/${{ github.sha }}"
+          aws s3 sync $EP --no-progress astro/dist "$DEST" ||
+            aws s3 sync $EP --no-progress astro/dist "$DEST"
+          echo -n "${{ github.sha }}" | aws s3 cp $EP - s3://bioc-site/site/latest
+
+      - name: Comment preview URL
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const url = `https://bioc-dev.cancerdatasci.org/_pr/${context.issue.number}/`;
+            const marker = '<!-- preview-url -->';
+            const body = `${marker}\nPreview for ${context.payload.pull_request.head.sha}: ${url}`;
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number });
+            const mine = comments.find(c => c.body.startsWith(marker));
+            if (mine) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: mine.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }

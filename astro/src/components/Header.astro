@@ -1,8 +1,16 @@
 ---
 // Ported verbatim from layouts/components/header.html. The only ERB in the
-// original is a render of the announcement partial, which upstream comments out
-// when there is nothing to announce; it is omitted here for the same reason.
+// original is a render of the announcement partial — carried as data
+// (data/site/announcement.html, extracted verbatim by the pipeline) so
+// upstream's hand edits flow through `just data`. Empty file = no banner,
+// which is how upstream "comments it out".
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+const f = join(process.cwd(), 'data', 'site', 'announcement.html');
+const announcement = existsSync(f) ? readFileSync(f, 'utf8').trim() : '';
 ---
+{announcement && <Fragment set:html={announcement} />}
 <header id="site-masthead" class="site-masthead">
   <div class="header-size">
     <div class="header-logo">
