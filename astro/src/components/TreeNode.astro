@@ -13,7 +13,11 @@
  */
 import TreeNode from './TreeNode.astro';
 
-const { node, version } = Astro.props;
+// repoOf: package name -> repo path ('bioc', 'data/annotation', ...). The
+// vocabulary spans all four repos, so a fixed /bioc/ link would 404 for every
+// annotation and experiment package.
+const { node, version, repoOf = {} } = Astro.props;
+const hrefFor = (p) => `/packages/${version}/${repoOf[p] ?? 'bioc'}/html/${p}.html`;
 
 const label = String(node.data ?? '');
 const m = label.match(/^(.*?)\s*\((\d+)\)\s*$/);
@@ -37,11 +41,11 @@ const anchor = `___${id}`;
     {packages.length > 0 && (
       <div class="bv-pkgs">
         {packages.map((p) => (
-          <a href={`/packages/${version}/bioc/html/${p}.html`}>{p}</a>
+          <a href={hrefFor(p)} data-pkg={p}>{p}</a>
         ))}
       </div>
     )}
-    {children.map((c) => <TreeNode node={c} version={version} />)}
+    {children.map((c) => <TreeNode node={c} version={version} repoOf={repoOf} />)}
   </details>
 ) : (
   <div class="bv-leaf" id={anchor}>
@@ -49,7 +53,7 @@ const anchor = `___${id}`;
     {packages.length > 0 && (
       <div class="bv-pkgs">
         {packages.map((p) => (
-          <a href={`/packages/${version}/bioc/html/${p}.html`}>{p}</a>
+          <a href={hrefFor(p)} data-pkg={p}>{p}</a>
         ))}
       </div>
     )}
