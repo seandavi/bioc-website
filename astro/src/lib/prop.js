@@ -1,4 +1,4 @@
-// Data provider for the bioc-prop data plane (the propagation gate).
+// Data provider for the bioc-registry data plane (the propagation gate).
 // Landing pages and check pages render from what *propagated*, not whatever
 // r-universe last built: the prop index is the authority on versions, the
 // observation archive on check status.
@@ -11,7 +11,7 @@
 // too often to archive and losing them must never fail a build.
 
 const BASE =
-  process.env.PROP_DATA_BASE ?? 'https://bioc-prop.seandavi.workers.dev/data';
+  process.env.PROP_DATA_BASE ?? 'https://bioc-registry.seandavi.workers.dev/data';
 
 // release first: it is the one people land on.
 export const UNIVERSES = ['bioc-release', 'bioc'];

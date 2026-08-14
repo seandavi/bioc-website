@@ -1,6 +1,6 @@
 ---
 /**
- * Check results for one universe, from the bioc-prop data plane: the latest
+ * Check results for one universe, from the bioc-registry data plane: the latest
  * observation's `_jobs` (one check per config), plus the propagation index so
  * every row shows whether the gate let this version through. Legacy
  * checkResults never had an equivalent page here -- this is new work, not a
@@ -45,7 +45,7 @@ const cls = (check) =>
 <Next title={`Check results — ${universe}`}>
   <h1>Check results: {universe}</h1>
   <p class="preview-note">
-    Preview page. Data: latest bioc-prop observation ({obs.length} packages) and
+    Preview page. Data: latest bioc-registry observation ({obs.length} packages) and
     propagation index. Sorted worst-first.
   </p>
 

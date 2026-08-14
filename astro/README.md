@@ -38,7 +38,7 @@ so the timing is a lower bound, not a like-for-like comparison.
 
 ## Next-gen pages (2026-08-11)
 
-`/next/` renders from the **bioc-prop data plane** (propagation gate over
+`/next/` renders from the **bioc-registry data plane** (propagation gate over
 r-universe builds) instead of the legacy docroot — see `src/lib/prop.js`:
 
 - `/next/{universe}/checkResults.html` — check matrix from the latest
@@ -50,7 +50,7 @@ r-universe builds) instead of the legacy docroot — see `src/lib/prop.js`:
   Version truth is the prop index; downloads are the gate's content-addressed
   artifacts.
 
-Data is fetched at build time from the bioc-prop Worker (`PROP_DATA_BASE` to
+Data is fetched at build time from the bioc-registry Worker (`PROP_DATA_BASE` to
 override). Metadata comes from r-universe directly as a stopgap until the data
 plane publishes a metadata artifact (issue #78); version skew between the live
 build and the propagated version is surfaced in the page banner.

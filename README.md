@@ -31,7 +31,7 @@ flowchart LR
     astro["astro/ renderer"]
     dist["astro/dist/<br/>~97k pages, ~60 s"]
   end
-  prop["bioc-prop data plane<br/>build/check/propagation state"]
+  prop["bioc-registry data plane<br/>build/check/propagation state"]
   nanoc & runi & tarballs & views --> pipeline --> data --> astro --> dist
   prop -- "build-time fetch (/next/ pages)" --> astro
 ```
@@ -41,7 +41,7 @@ indexes, and biocViews browsers for releases 2.5–3.24, plus the prose pages,
 from primary sources — no access to the legacy hosts required. Coverage
 against the live site is measured (`just coverage`), not assumed. The `/next/`
 track renders check-results and package pages from the
-[bioc-prop data plane](https://bioc-prop.seandavi.workers.dev/docs) — new
+[bioc-registry data plane](https://bioc-registry.seandavi.workers.dev/docs) — new
 work; the legacy site never built check pages.
 
 ## How builds are published and served
@@ -115,7 +115,7 @@ pipeline-free curl setup for the parity pages.
 |---|---|
 | this one | renderer + pipeline; publishes builds |
 | private infra repo | Cloudflare Worker, R2 storage, legacy-content sync, route table — decides what production serves |
-| bioc-prop data plane | observes r-universe builds, evaluates the propagation gate, publishes the artifacts `/next/` renders |
+| bioc-registry data plane | observes r-universe builds, evaluates the propagation gate, publishes the artifacts `/next/` renders |
 | [Bioconductor/bioconductor.org](https://github.com/Bioconductor/bioconductor.org) | the legacy nanoc site; still the home of prose content until the markdown import lands here |
 
 ## Status
