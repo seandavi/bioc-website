@@ -11,14 +11,31 @@
  * XHR. This renders the same tree at build time as nested <details>. Same data,
  * same anchors (`#___Software`, linked directly from the header and footer),
  * but it works without JavaScript, is crawlable, and does not depend on a
- * second request succeeding. Collapse behaviour comes from <details>, a
- * platform feature, instead of the widget.
+ * second request succeeding.
+ *
+ * Two layers of progressive enhancement over that base:
+ *  - Find biocViews: type-to-filter over the term tree.
+ *  - Selecting a term renders its cumulative package table (name + title),
+ *    which is what the page is actually for. Membership comes from walking the
+ *    already-rendered subtree; only the name -> [repo, title] map is embedded.
  */
 import TreeNode from './TreeNode.astro';
+import { reposFor, loadRepo } from '../lib/packages.js';
 
 const { version, tree, channel = null, other = null } = Astro.props;
 const roots = Array.isArray(tree) ? tree : [tree];
 const channelLabel = { release: 'Release', devel: 'Devel' };
+
+// name -> [repoPath, Title], across every repo of this release. Fixes the
+// tree's package links (annotation packages do not live under /bioc/) and
+// feeds the selection table.
+const pkgMap = {};
+for (const repo of reposFor(version)) {
+  for (const [name, pkg] of Object.entries(loadRepo(version, repo))) {
+    pkgMap[name] = [repo, pkg.Title ?? ''];
+  }
+}
+const repoOf = Object.fromEntries(Object.entries(pkgMap).map(([n, v]) => [n, v[0]]));
 ---
 <ul class="breadcrumbs">
   <li><a href="/">Home</a></li>
@@ -51,24 +68,34 @@ const channelLabel = { release: 'Release', devel: 'Devel' };
   </div>
 </div>
 
-<div class="biocViewsTreeContainer">
-  {roots.map((root) => <TreeNode node={root} version={version} />)}
+<div class="bv-columns">
+  <div class="biocViewsTreeContainer">
+    {roots.map((root) => <TreeNode node={root} version={version} repoOf={repoOf} />)}
+  </div>
+  <div id="bv-packages" hidden>
+    <h2 id="bv-packages-title"></h2>
+    <table class="bv-packages-table">
+      <thead><tr><th>Package</th><th>Title</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </div>
 
+<script type="application/json" id="bv-data" set:html={JSON.stringify({ version, pkgs: pkgMap })} />
+
 <script is:inline>
-  // Progressive enhancement over the server-rendered tree: without JS the
-  // full <details> tree still browses; with it, typing filters terms. A term
-  // is shown when it, or any descendant, matches; a matching term reveals its
-  // whole subtree (collapsed) so context is explorable. Clearing restores the
-  // resting collapsed state.
   (() => {
     const input = document.getElementById('bv-filter');
     const root = document.querySelector('.biocViewsTreeContainer');
-    if (!input || !root) return;
+    const panel = document.getElementById('bv-packages');
+    if (!input || !root || !panel) return;
+    const { version, pkgs } = JSON.parse(document.getElementById('bv-data').textContent);
+
+    // ---- term filter -----------------------------------------------------
     const nodes = (el) => [...el.children].filter((c) => c.matches('.bv-term, .bv-leaf'));
     const nameOf = (el) => {
       const holder = el.matches('details') ? el.querySelector(':scope > summary') : el;
-      return (holder?.childNodes[0]?.textContent ?? '').trim().toLowerCase();
+      return (holder?.childNodes[0]?.textContent ?? '').trim();
     };
     const pkgsOf = (el) => el.querySelector(':scope > .bv-pkgs');
     const reveal = (el) => {
@@ -78,13 +105,11 @@ const channelLabel = { release: 'Release', devel: 'Devel' };
       for (const k of nodes(el)) reveal(k);
     };
     const apply = (el, q) => {
-      const self = q !== '' && nameOf(el).includes(q);
+      const self = q !== '' && nameOf(el).toLowerCase().includes(q);
       let childHit = false;
       for (const k of nodes(el)) childHit = apply(k, q) || childHit;
       const visible = q === '' || self || childHit;
       el.style.display = visible ? '' : 'none';
-      // An ancestor opened only as the path to a match shows its child terms,
-      // not its own (possibly enormous) direct package list.
       const pk = pkgsOf(el);
       if (pk) pk.style.display = q === '' || self ? '' : 'none';
       if (self) for (const k of nodes(el)) reveal(k);
@@ -95,6 +120,50 @@ const channelLabel = { release: 'Release', devel: 'Devel' };
       const q = input.value.trim().toLowerCase();
       for (const top of nodes(root)) apply(top, q);
     });
+
+    // ---- package table on term selection --------------------------------
+    // Membership is the union of package links in the selected subtree -- the
+    // build already rendered it, so no term->packages data needs shipping.
+    const render = (el) => {
+      const names = [...new Set(
+        [...el.querySelectorAll('a[data-pkg]')].map((a) => a.dataset.pkg),
+      )].sort((a, b) => a.localeCompare(b));
+      document.getElementById('bv-packages-title').textContent =
+        `${nameOf(el)} (${names.length} packages)`;
+      const body = panel.querySelector('tbody');
+      body.replaceChildren(...names.map((n) => {
+        const [repo, title] = pkgs[n] ?? ['bioc', ''];
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        const a = document.createElement('a');
+        a.href = `/packages/${version}/${repo}/html/${n}.html`;
+        a.textContent = n;
+        td.appendChild(a);
+        const tt = document.createElement('td');
+        tt.textContent = title;
+        tr.append(td, tt);
+        return tr;
+      }));
+      panel.hidden = false;
+    };
+    root.addEventListener('click', (ev) => {
+      const s = ev.target.closest('summary, .bv-leaf');
+      if (!s || !root.contains(s)) return;
+      render(s.matches('summary') ? s.parentElement : s);
+    });
+    // #___Term deep links behave like upstream: open the path and show the
+    // table for the linked term.
+    const fromHash = () => {
+      const id = decodeURIComponent(location.hash.slice(1));
+      const el = id && document.getElementById(id);
+      if (!el || !root.contains(el)) return;
+      for (let p = el; p && p !== root; p = p.parentElement)
+        if (p.matches('details')) p.open = true;
+      render(el);
+      el.scrollIntoView();
+    };
+    addEventListener('hashchange', fromHash);
+    fromHash();
   })();
 </script>
 
@@ -107,6 +176,16 @@ const channelLabel = { release: 'Release', devel: 'Devel' };
   }
   .biocViewsWidget .join-buttons { margin: 0.75rem 0; }
   .biocViewsWidget .ui-widget label { display: block; margin-bottom: 0.4rem; }
+  .bv-columns { display: flex; gap: 2rem; align-items: flex-start; flex-wrap: wrap; }
+  .biocViewsTreeContainer { flex: 0 1 24rem; min-width: 18rem; }
+  #bv-packages { flex: 1 1 24rem; min-width: 0; }
+  #bv-packages table { width: 100%; border-collapse: collapse; }
+  #bv-packages th { text-align: left; }
+  #bv-packages th, #bv-packages td {
+    padding: 0.3rem 0.6rem;
+    border-bottom: 1px solid #e3e6eb;
+    vertical-align: top;
+  }
   .biocViewsTreeContainer :global(.bv-term) { margin: 0.15rem 0 0.15rem 0.75rem; }
   .biocViewsTreeContainer :global(.bv-term > summary) { cursor: pointer; }
   .biocViewsTreeContainer :global(.bv-leaf) { margin: 0.15rem 0 0.15rem 0.75rem; }
