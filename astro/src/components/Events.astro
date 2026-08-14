@@ -12,15 +12,19 @@ import { eventDate } from '../lib/content.js';
 const { events = [] } = Astro.props;
 ---
 {events.map((e) => (
-  <a href={e.link?.url ?? e.url}>
-    <div class="event-card-container">
-      <div class="event-card">
-        <p class="format-bold">{e.title}</p>
-        <div class="event-date-location">
-          <p class="text-small">{eventDate(e)}</p>
-          <p class="text-small">{e.location}</p>
+  <>
+    <a href={e.link?.url ?? e.url}>
+      <div class="event-card-container">
+        <div class="event-card">
+          <p class="format-bold">{e.title}</p>
+          <div class="event-date-location">
+            <p class="text-small">{eventDate(e)}</p>
+            <p class="text-small">{e.location}</p>
+          </div>
         </div>
       </div>
-    </div>
-  </a>
+    </a>
+    <br />
+    <br />
+  </>
 ))}
