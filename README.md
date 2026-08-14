@@ -73,19 +73,28 @@ Concretely (`.github/workflows/site.yml`):
 - **Every push to `main`** publishes an immutable `site/<sha>/` build and
   moves the `site/latest` pointer. Retention of old builds is
   [#2](https://github.com/seandavi/bioconductor-website/issues/2).
+- **CI builds only the mutable surface** — prose pages, the live releases
+  (currently 3.23 and 3.24), and `/next/`. The frozen releases (2.5–3.22) are
+  archival: the Worker serves them from the mirrored legacy content in R2, and
+  their routes never flip to Astro builds. The renderer discovers releases
+  from whatever is in `astro/data/`, so this is a property of the data
+  snapshot, not a code path.
 - **Builds read a data snapshot**, not primary sources: CI pulls
-  `_ci/site-data.tar.zst` (the pipeline's `astro/data/` output plus the copied
-  `astro/public/` assets) from the bucket. Refresh it by running the pipeline
-  locally and re-uploading:
+  `_ci/site-data.tar.zst` (live releases' `astro/data/` plus the copied
+  `astro/public/` assets). Refresh it by running the pipeline locally and
+  re-uploading:
 
   ```sh
   just data
-  tar -C astro -cf - data public | zstd -T0 -8 | rclone rcat r2:bioc-site/_ci/site-data.tar.zst
+  tar -C astro -cf - data/site data/3.23 data/3.24 public | zstd -T0 -8 \
+    | rclone rcat r2:bioc-site/_ci/site-data.tar.zst
   ```
 
   Scheduling that refresh is [#5](https://github.com/seandavi/bioconductor-website/issues/5).
-  Note the snapshot also carries the frozen data for releases 2.5–3.22, which
-  is a preserved snapshot and not regenerable from any live source.
+  The full 35-release data — including the frozen 2.5–3.22 snapshot, which is
+  **not regenerable from any live source** — lives at
+  `_ci/site-data-full.tar.zst`; swap it in locally to rebuild an archival page
+  deliberately.
 
 ## Quickstart
 
