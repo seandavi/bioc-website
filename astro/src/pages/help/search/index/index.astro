@@ -1,0 +1,136 @@
+---
+/**
+ * Site search, at the legacy URL (/help/search/) the header form already
+ * targets. The legacy page queried master's Solr, which has no migration
+ * path; this one queries a Pagefind index built from the site itself at
+ * build time (`pagefind --site dist`, wired into `npm run build`). No
+ * backend, works in PR previews automatically.
+ *
+ * The header form submits GET with `search-bar`; honor that (and `q`).
+ */
+import Site from '../../../../layouts/Site.astro';
+import { versions, reposFor, loadRepo } from '../../../../lib/packages.js';
+
+// Exact/prefix package-name matches get a dedicated strip above the
+// full-text results: BM25 can be out-scored by a short page that mentions a
+// package repeatedly (limmaGUI vs limma), but a name match is unambiguous.
+const byNum = versions().slice().sort((a, b) => {
+  const [am, an] = a.split('.').map(Number);
+  const [bm, bn] = b.split('.').map(Number);
+  return am - bm || an - bn;
+});
+const release = byNum[byNum.length - 2];
+const names = {};
+for (const repo of reposFor(release)) {
+  for (const name of Object.keys(loadRepo(release, repo))) names[name] = repo;
+}
+---
+<Site title="Search" description="Search bioconductor.org packages and pages">
+  <ul class="breadcrumbs">
+    <li><a href="/">Home</a></li>
+    <li><a href="/help/">Learn</a></li>
+    <li>Search</li>
+  </ul>
+
+  <h1>Search</h1>
+
+  <div id="search" data-pagefind-ignore>
+    <div id="search-input"></div>
+    <div id="search-hits" hidden>
+      <span class="hits-label">Packages:</span>
+      <span id="search-hits-list"></span>
+    </div>
+    <div id="search-filters"></div>
+    <div id="search-summary"></div>
+    <div id="search-results"></div>
+  </div>
+
+  <link rel="stylesheet" href="/pagefind/pagefind-modular-ui.css" />
+  <script type="application/json" id="pkg-names" set:html={JSON.stringify({ version: release, names })} />
+  <script is:inline src="/pagefind/pagefind-modular-ui.js"></script>
+  <script is:inline>
+    window.addEventListener('DOMContentLoaded', () => {
+      const params = new URLSearchParams(location.search);
+      // The vendored legacy JS "normalizes" trailing slashes onto the full
+      // URL, query string included ("?search-bar=limma/"); strip it.
+      const q = (params.get('search-bar') ?? params.get('q') ?? '').replace(/\/+$/, '');
+      // Unrecognized constructor options are forwarded to pagefind.options();
+      // ranking here favors where a term appears (the weighted package-name
+      // heading) over how often it appears, so the package "limma" outranks
+      // pages that merely mention limma repeatedly.
+      const instance = new PagefindModularUI.Instance({
+        ranking: { termFrequency: 0.0, termSimilarity: 9 },
+      });
+      instance.add(new PagefindModularUI.Input({ containerElement: '#search-input' }));
+      instance.add(new PagefindModularUI.FilterPills({ containerElement: '#search-filters', filter: 'type' }));
+      instance.add(new PagefindModularUI.Summary({ containerElement: '#search-summary' }));
+      instance.add(new PagefindModularUI.ResultList({ containerElement: '#search-results' }));
+      if (q) instance.triggerSearch(q);
+
+      // Package-name quick hits, exact and prefix matches first.
+      const { version, names } = JSON.parse(document.getElementById('pkg-names').textContent);
+      const all = Object.keys(names).sort((a, b) => a.localeCompare(b));
+      const hits = document.getElementById('search-hits');
+      const list = document.getElementById('search-hits-list');
+      const update = (raw) => {
+        const t = raw.trim().toLowerCase();
+        if (t.length < 2) { hits.hidden = true; return; }
+        const starts = [];
+        const contains = [];
+        for (const n of all) {
+          const nl = n.toLowerCase();
+          if (nl.startsWith(t)) starts.push(n);
+          else if (nl.includes(t)) contains.push(n);
+        }
+        const top = [...starts, ...contains].slice(0, 8);
+        if (!top.length) { hits.hidden = true; return; }
+        list.replaceChildren(...top.map((n) => {
+          const a = document.createElement('a');
+          a.href = `/packages/${version}/${names[n]}/html/${n}.html`;
+          a.textContent = n;
+          a.className = 'hit-pill';
+          return a;
+        }));
+        hits.hidden = false;
+      };
+      // The instance event covers both typed input and triggerSearch, and
+      // fires after the Input component settles -- listening on the raw
+      // element raced its initialization.
+      instance.on('search', (term) => {
+        // The Input component emits one empty search while initializing;
+        // trust the visible input over a bare event.
+        const cur = document.querySelector('#search-input input')?.value ?? '';
+        update(term || cur);
+      });
+      if (q) update(q);
+    });
+  </script>
+
+  <style is:global>
+    #search {
+      max-width: 44rem;
+      margin-bottom: 3rem;
+    }
+    #search input {
+      width: 100%;
+      font-size: 1.05rem;
+      padding: 0.55rem 0.8rem;
+      border: 1px solid #d3d7de;
+      border-radius: 8px;
+    }
+    #search .pagefind-modular-filter-pills-wrapper { margin: 0.75rem 0; }
+    #search-hits { margin: 0.75rem 0; display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: baseline; }
+    #search-hits .hits-label { color: #5d657c; font-size: 0.9em; }
+    #search-hits .hit-pill {
+      border: 1px solid #3792ad;
+      border-radius: 999px;
+      padding: 0.1rem 0.7rem;
+      text-decoration: none;
+    }
+    #search .pagefind-modular-list-result { padding: 0.6rem 0; border-bottom: 1px solid #e3e6eb; }
+    /* no page images in this index; drop the placeholder column */
+    #search .pagefind-modular-list-thumb { display: none; }
+    #search .pagefind-modular-list-title { font-weight: 700; }
+    #search .pagefind-modular-list-excerpt mark { background: #dff0f6; }
+  </style>
+</Site>
