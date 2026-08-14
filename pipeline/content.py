@@ -259,6 +259,13 @@ def write(repo, outdir):
             # YAML parses unquoted dates into date objects; the event sidecars are
             # full of them. ISO strings are what the renderer wants anyway.
             json.dump(obj, fh, indent=1, default=str)
+    # The site-wide announcement banner is a hand-edited fragment in the
+    # upstream layouts, not content: carry it verbatim so an upstream edit
+    # flows through `just data` with no renderer change. Absent or fully
+    # commented-out upstream -> empty file -> no banner.
+    ann = os.path.join(repo, "layouts", "components", "announcement.html")
+    with open(os.path.join(dest, "announcement.html"), "w", encoding="utf-8") as fh:
+        fh.write(open(ann, encoding="utf-8").read() if os.path.exists(ann) else "")
     print("[content] %d pages, %d events -> %s" % (len(pages), len(events), dest),
           file=sys.stderr)
     print("[content] %d contain ERB (%d heavily), %d haml, %d generated pages skipped"
