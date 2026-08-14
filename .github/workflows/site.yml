@@ -28,6 +28,9 @@ env:
   # aws-cli >= 2.23 sends CRC checksums R2 rejects; only checksum when asked.
   AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
   AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+  # R2 throws transient ServiceUnavailable under sync's concurrency.
+  AWS_MAX_ATTEMPTS: "10"
+  AWS_RETRY_MODE: adaptive
   EP: --endpoint-url ${{ secrets.R2_ENDPOINT }}
 
 jobs:
@@ -55,12 +58,19 @@ jobs:
 
       - name: Publish preview
         if: github.event_name == 'pull_request'
-        run: aws s3 sync $EP --delete --no-progress astro/dist "s3://bioc-site/preview/pr-${{ github.event.number }}"
+        # Second pass only re-touches what the first left behind: sync is
+        # idempotent, and one transient failure must not fail the build.
+        run: |
+          DEST="s3://bioc-site/preview/pr-${{ github.event.number }}"
+          aws s3 sync $EP --delete --no-progress astro/dist "$DEST" ||
+            aws s3 sync $EP --delete --no-progress astro/dist "$DEST"
 
       - name: Publish versioned build
         if: github.event_name == 'push'
         run: |
-          aws s3 sync $EP --no-progress astro/dist "s3://bioc-site/site/${{ github.sha }}"
+          DEST="s3://bioc-site/site/${{ github.sha }}"
+          aws s3 sync $EP --no-progress astro/dist "$DEST" ||
+            aws s3 sync $EP --no-progress astro/dist "$DEST"
           echo -n "${{ github.sha }}" | aws s3 cp $EP - s3://bioc-site/site/latest
 
       - name: Comment preview URL
