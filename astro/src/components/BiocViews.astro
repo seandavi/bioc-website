@@ -16,8 +16,9 @@
  */
 import TreeNode from './TreeNode.astro';
 
-const { version, tree } = Astro.props;
+const { version, tree, channel = null, other = null } = Astro.props;
 const roots = Array.isArray(tree) ? tree : [tree];
+const channelLabel = { release: 'Release', devel: 'Devel' };
 ---
 <ul class="breadcrumbs">
   <li><a href="/">Home</a></li>
@@ -27,11 +28,85 @@ const roots = Array.isArray(tree) ? tree : [tree];
 <h1>Bioconductor {version} Package Categories</h1>
 <p>Browse packages by biocViews term. Counts are cumulative over each subtree.</p>
 
+<div class="biocViewsWidget">
+  <p class="format-bold">
+    Bioconductor version {version}{channel && ` (${channelLabel[channel]})`}
+  </p>
+  {other && (
+    <div class="join-buttons">
+      <a class="brand-border-button" href={`/packages/${other.version}/BiocViews.html#___Software`}>
+        <span class="span-brand format-bold">
+          Go to {other.version} ({channelLabel[other.channel]})
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="15" viewBox="0 0 14 15" fill="none">
+            <path d="M5.25 3.66665L9.33333 7.74998L5.25 11.8333" stroke="#3792AD" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+        </span>
+      </a>
+    </div>
+  )}
+  <div class="ui-widget">
+    <label for="bv-filter">Find biocViews:</label>
+    <input type="text" id="bv-filter" size="35" class="package-input" autocomplete="off"
+      placeholder="type to filter terms" />
+  </div>
+</div>
+
 <div class="biocViewsTreeContainer">
   {roots.map((root) => <TreeNode node={root} version={version} />)}
 </div>
 
+<script is:inline>
+  // Progressive enhancement over the server-rendered tree: without JS the
+  // full <details> tree still browses; with it, typing filters terms. A term
+  // is shown when it, or any descendant, matches; a matching term reveals its
+  // whole subtree (collapsed) so context is explorable. Clearing restores the
+  // resting collapsed state.
+  (() => {
+    const input = document.getElementById('bv-filter');
+    const root = document.querySelector('.biocViewsTreeContainer');
+    if (!input || !root) return;
+    const nodes = (el) => [...el.children].filter((c) => c.matches('.bv-term, .bv-leaf'));
+    const nameOf = (el) => {
+      const holder = el.matches('details') ? el.querySelector(':scope > summary') : el;
+      return (holder?.childNodes[0]?.textContent ?? '').trim().toLowerCase();
+    };
+    const pkgsOf = (el) => el.querySelector(':scope > .bv-pkgs');
+    const reveal = (el) => {
+      el.style.display = '';
+      const pk = pkgsOf(el);
+      if (pk) pk.style.display = '';
+      for (const k of nodes(el)) reveal(k);
+    };
+    const apply = (el, q) => {
+      const self = q !== '' && nameOf(el).includes(q);
+      let childHit = false;
+      for (const k of nodes(el)) childHit = apply(k, q) || childHit;
+      const visible = q === '' || self || childHit;
+      el.style.display = visible ? '' : 'none';
+      // An ancestor opened only as the path to a match shows its child terms,
+      // not its own (possibly enormous) direct package list.
+      const pk = pkgsOf(el);
+      if (pk) pk.style.display = q === '' || self ? '' : 'none';
+      if (self) for (const k of nodes(el)) reveal(k);
+      if (el.matches('details')) el.open = q !== '' && (self || childHit);
+      return self || childHit;
+    };
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      for (const top of nodes(root)) apply(top, q);
+    });
+  })();
+</script>
+
 <style>
+  .biocViewsWidget {
+    border: 1px solid #d3d7de;
+    border-radius: 8px;
+    padding: 1rem 1.5rem;
+    margin: 1rem 0 1.5rem;
+  }
+  .biocViewsWidget .join-buttons { margin: 0.75rem 0; }
+  .biocViewsWidget .ui-widget label { display: block; margin-bottom: 0.4rem; }
   .biocViewsTreeContainer :global(.bv-term) { margin: 0.15rem 0 0.15rem 0.75rem; }
   .biocViewsTreeContainer :global(.bv-term > summary) { cursor: pointer; }
   .biocViewsTreeContainer :global(.bv-leaf) { margin: 0.15rem 0 0.15rem 0.75rem; }
