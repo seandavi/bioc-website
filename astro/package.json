@@ -3,12 +3,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "astro build",
+    "build": "astro build && pagefind --site dist",
     "dev": "astro dev",
     "preview": "astro preview"
   },
   "dependencies": {
+    "@astrojs/react": "^6.0.2",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "astro": "^5.0.0",
-    "marked": "^18.0.7"
+    "marked": "^18.0.7",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "pagefind": "^1.5.2"
   }
 }

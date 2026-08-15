@@ -7,7 +7,9 @@
  */
 import { depName, asArray } from '../lib/packages.js';
 
-const { pkg, name, version, repo } = Astro.props;
+// `indexed` marks this page for the build-time Pagefind index (release pages
+// only: indexing devel too would put near-duplicates in every result list).
+const { pkg, name, version, repo, indexed = false } = Astro.props;
 
 // Cross-repo links are not resolved: a dependency named here may live in any of
 // the four repositories or on CRAN, and guessing wrong produces a confident 404.
@@ -39,11 +41,19 @@ const repoLabels = {
   <li>{name}</li>
 </ul>
 
-<h1>{name}</h1>
-<p class="package-title">{pkg.Title}</p>
-<p class="version">Bioconductor version: {version} &middot; Package version: {pkg.Version}</p>
+<div
+  data-pagefind-body={indexed ? '' : undefined}
+  data-pagefind-filter={indexed ? 'type:Packages' : undefined}
+>
+  {indexed && <span hidden data-pagefind-filter={`repo:${repoLabels[repo] ?? repo}`} />}
+  <h1 data-pagefind-weight="10">{name}</h1>
+  <p class="package-title">{pkg.Title}</p>
+  <p class="version" data-pagefind-ignore>
+    Bioconductor version: {version} &middot; Package version: {pkg.Version}
+  </p>
 
-{pkg.Description && <p class="description">{pkg.Description}</p>}
+  {pkg.Description && <p class="description">{pkg.Description}</p>}
+</div>
 
 <h2>Installation</h2>
 <pre><code>{`if (!require("BiocManager", quietly = TRUE))

@@ -36,7 +36,9 @@ export async function getStaticPaths() {
       for (const [name, pkg] of Object.entries(pkgs)) {
         paths.push({
           params: { slug: `${version}/${repo}/html/${name}` },
-          props: { kind: 'detail', pkg, name, version, repo },
+          // Pagefind indexes the release's pages only: devel near-duplicates
+          // would shadow every result, and archival releases are frozen.
+          props: { kind: 'detail', pkg, name, version, repo, indexed: version === release },
         });
       }
       // build.format is 'file', so the '<...>/index' slug emits
@@ -74,7 +76,7 @@ const titles = {
 ---
 <Site title={titles[props.kind]()} description={props.kind === 'detail' ? props.pkg.Title : undefined}>
   {props.kind === 'detail' && (
-    <PackageDetail pkg={props.pkg} name={props.name} version={props.version} repo={props.repo} />
+    <PackageDetail pkg={props.pkg} name={props.name} version={props.version} repo={props.repo} indexed={props.indexed} />
   )}
   {props.kind === 'index' && (
     <PackageIndex version={props.version} repo={props.repo} label={props.label} packages={props.packages} />

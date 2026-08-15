@@ -22,6 +22,10 @@ import { loadPages, loadEvents, topEvents } from '../lib/content.js';
 export async function getStaticPaths() {
   return loadPages()
     .filter((p) => p.renderable)
+    // The legacy search page is a shell around a Solr backend that has no
+    // migration path; pages/help/search/ replaces it with Pagefind and would
+    // otherwise collide on the same output file.
+    .filter((p) => p.url !== '/help/search/')
     .map((p) => ({
       // '/' -> 'index', '/about/' -> 'about/index'. Astro is configured with
       // build.format 'file', which emits <slug>.html, so naming the slug
@@ -50,10 +54,12 @@ const events = parts.length > 1 ? topEvents(loadEvents()) : [];
       <div class="container"><Fragment set:html={page.hero} /></div>
     </section>
   )}
-  {parts.map((chunk, i) => (
-    <>
-      <Fragment set:html={chunk} />
-      {i < parts.length - 1 && <Events events={events} />}
-    </>
-  ))}
+  <div data-pagefind-body data-pagefind-filter="type:Pages" data-pagefind-meta={page.title ? `title:${page.title}` : undefined}>
+    {parts.map((chunk, i) => (
+      <>
+        <Fragment set:html={chunk} />
+        {i < parts.length - 1 && <Events events={events} />}
+      </>
+    ))}
+  </div>
 </Site>
