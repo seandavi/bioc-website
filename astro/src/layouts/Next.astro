@@ -8,7 +8,9 @@
 const { title, description } = Astro.props;
 ---
 <!DOCTYPE html>
-<html lang="en">
+<!-- Same tag as Site.astro: Pagefind indexes per html lang, and a mismatch
+     files these pages in a separate index site search never queries (#11). -->
+<html lang="en-US">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
