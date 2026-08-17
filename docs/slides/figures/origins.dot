@@ -1,0 +1,28 @@
+digraph origins {
+  graph [rankdir=LR, bgcolor=transparent, fontname="Helvetica",
+         nodesep=0.25, ranksep=0.9];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica",
+         fontsize=12, penwidth=1.3, margin="0.18,0.12"];
+  edge  [fontname="Helvetica", fontsize=10, penwidth=1.2, color="#7a7a7a"];
+
+  subgraph cluster_src {
+    label = "primary sources — none hosted on a machine being retired";
+    fontsize = 12; fontcolor = "#555555"; color = "#cccccc"; style = "rounded";
+    runi [label="r-universe\nsoftware metadata", fillcolor="#e3f0e3", color="#4a7a4a"];
+    tar  [label="source tarballs\nDESCRIPTION", fillcolor="#e3f0e3", color="#4a7a4a"];
+    voc  [label="biocViews\nvocabulary repo", fillcolor="#e3f0e3", color="#4a7a4a"];
+    git  [label="bioconductor.org\ngit repo (prose)", fillcolor="#e3f0e3", color="#4a7a4a"];
+    cran [label="CRAN PACKAGES\nreverse deps", fillcolor="#e3f0e3", color="#4a7a4a"];
+  }
+
+  pipe [label="pipeline\n~1,300 lines Python", fillcolor="#e8e8f5", color="#5a5a9a"];
+  data [label="astro/data/\nTHE CONTRACT", shape=cylinder, style=filled,
+        fillcolor="#fff3d6", color="#b8860b", penwidth=1.8];
+  rend [label="renderer\n~2,000 lines Astro", fillcolor="#e8e8f5", color="#5a5a9a"];
+  out  [label="~97,000 static pages\n~60 seconds", fillcolor="#f2f2f2", color="#888888"];
+
+  runi -> pipe; tar -> pipe; voc -> pipe; git -> pipe; cran -> pipe;
+  pipe -> data [penwidth=1.8, color="#b8860b"];
+  data -> rend [penwidth=1.8, color="#b8860b"];
+  rend -> out;
+}

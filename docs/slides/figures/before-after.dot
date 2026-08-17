@@ -1,0 +1,69 @@
+digraph beforeafter {
+  graph [rankdir=TB, bgcolor=transparent, fontname="Helvetica",
+         nodesep=0.28, ranksep=0.38, compound=true];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica",
+         fontsize=11, penwidth=1.3, margin="0.18,0.10"];
+  edge  [fontname="Helvetica", fontsize=9, penwidth=1.2, color="#7a7a7a"];
+
+  // ------------------------------------------------------------- BEFORE ---
+  subgraph cluster_before {
+    label = "TODAY  —  5 machines we run, 1 circular dependency";
+    fontsize = 13; fontcolor = "#b23b3b"; color = "#e8b4b4";
+    style = "rounded"; penwidth = 1.6;
+
+    b_m   [label="maintainers", shape=ellipse, fillcolor="#f2f2f2", color="#888888"];
+    b_bld [label="Mac · Linux · Windows builders\n3 physical machines",
+           fillcolor="#fde2e2", color="#b23b3b"];
+    b_mst [label="master webserver\nbuilds the docroot",
+           fillcolor="#fde2e2", color="#b23b3b"];
+    b_vws [label="VIEWS\npublished by the site", shape=note,
+           fillcolor="#fff3d6", color="#b8860b"];
+    b_stg [label="staging webserver\none shared preview",
+           fillcolor="#fde2e2", color="#b23b3b"];
+    b_cdn [label="CloudFront + S3", fillcolor="#fde2e2", color="#b23b3b"];
+    b_osn [label="OSN buckets\npublic assets", fillcolor="#fde2e2", color="#b23b3b"];
+    b_vis [label="visitor", shape=ellipse, fillcolor="#f2f2f2", color="#888888"];
+
+    { rank=same; b_mst; b_vws; }
+
+    b_m   -> b_bld;
+    b_bld -> b_mst [label=" packages "];
+    b_mst -> b_vws [dir=both, color="#b23b3b", penwidth=2.0, fontcolor="#b23b3b",
+                    label="  published,\l  then read back\l"];
+    b_mst -> b_cdn;
+    b_stg -> b_cdn [style=dashed];
+    b_cdn -> b_vis;
+    b_osn -> b_vis [style=dashed];
+  }
+
+  // -------------------------------------------------------------- AFTER ---
+  subgraph cluster_after {
+    label = "AFTER  —  0 machines we run, no cycle";
+    fontsize = 13; fontcolor = "#4a7a4a"; color = "#b4d4b4";
+    style = "rounded"; penwidth = 1.6;
+
+    a_m   [label="maintainers", shape=ellipse, fillcolor="#f2f2f2", color="#888888"];
+    a_run [label="r-universe\nbuilds packages", fillcolor="#e3f0e3", color="#4a7a4a"];
+    a_reg [label="bioc-registry\nthe propagation gate",
+           fillcolor="#e3f0e3", color="#4a7a4a", penwidth=1.7];
+    a_rep [label="installable R repository", shape=note,
+           fillcolor="#e3f0e3", color="#4a7a4a"];
+    a_bld [label="static site build\nCI, ~60 s", fillcolor="#e8e8f5", color="#5a5a9a"];
+    a_r2  [label="R2\nimmutable builds", shape=cylinder,
+           fillcolor="#fff3d6", color="#b8860b"];
+    a_wrk [label="Cloudflare Worker\nowns the route table",
+           fillcolor="#e3f0e3", color="#4a7a4a", penwidth=1.7];
+    a_vis [label="visitor", shape=ellipse, fillcolor="#f2f2f2", color="#888888"];
+
+    a_m   -> a_run;
+    a_run -> a_reg [label=" observed "];
+    a_reg -> a_rep [label=" install.packages() ", style=dashed];
+    a_reg -> a_bld [label=" data "];
+    a_bld -> a_r2;
+    a_r2  -> a_wrk;
+    a_wrk -> a_vis;
+  }
+
+  label = "Same job. One direction of flow, and nothing left to rack.";
+  labelloc = b; fontsize = 12; fontcolor = "#555555";
+}

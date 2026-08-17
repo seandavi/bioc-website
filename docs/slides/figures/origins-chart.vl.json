@@ -1,0 +1,42 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "description": "Package metadata origins for Bioconductor 3.23",
+  "background": "transparent",
+  "width": 620,
+  "height": 200,
+  "data": {
+    "values": [
+      {"repo": "Software",   "origin": "r-universe",          "n": 2417},
+      {"repo": "Annotation", "origin": "tarball DESCRIPTION",  "n": 896},
+      {"repo": "Annotation", "origin": "VIEWS (still circular)","n": 32},
+      {"repo": "Experiment", "origin": "tarball DESCRIPTION",  "n": 434},
+      {"repo": "Workflows",  "origin": "tarball DESCRIPTION",  "n": 25}
+    ]
+  },
+  "mark": {"type": "bar", "height": {"band": 0.7}},
+  "encoding": {
+    "y": {
+      "field": "repo", "type": "nominal", "title": null,
+      "sort": ["Software", "Annotation", "Experiment", "Workflows"],
+      "axis": {"labelFontSize": 14, "labelPadding": 6}
+    },
+    "x": {
+      "field": "n", "type": "quantitative",
+      "title": "packages in release 3.23",
+      "axis": {"labelFontSize": 12, "titleFontSize": 13, "grid": true}
+    },
+    "color": {
+      "field": "origin", "type": "nominal", "title": "origin",
+      "scale": {
+        "domain": ["r-universe", "tarball DESCRIPTION", "VIEWS (still circular)"],
+        "range": ["#4a7a4a", "#5a5a9a", "#b23b3b"]
+      },
+      "legend": {
+        "labelFontSize": 13, "titleFontSize": 13, "orient": "bottom",
+        "direction": "vertical", "labelLimit": 300, "title": null,
+        "symbolType": "square", "symbolSize": 160
+      }
+    },
+    "order": {"field": "origin"}
+  }
+}

@@ -3,6 +3,9 @@
 The next-generation [bioconductor.org](https://bioconductor.org) site: a static
 Astro build fed by a small Python pipeline, replacing the legacy nanoc site.
 
+For why this exists, what it replaces, and where it stands, see
+[docs/OVERVIEW.md](docs/OVERVIEW.md).
+
 Two halves, one seam — `astro/data/` is the contract between them:
 
 | half | does | lives in |

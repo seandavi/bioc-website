@@ -1,0 +1,35 @@
+digraph division {
+  graph [rankdir=TB, bgcolor=transparent, fontname="Helvetica",
+         nodesep=0.45, ranksep=0.55];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica",
+         fontsize=12, penwidth=1.4, margin="0.20,0.14"];
+  edge  [fontname="Helvetica", fontsize=10, penwidth=1.5, color="#b8860b"];
+
+  ru   [label="r-universe\nbuilds packages", shape=ellipse,
+        fillcolor="#f2f2f2", color="#888888"];
+  reg  [label="bioc-registry\nwhat is TRUE\nabout a package",
+        fillcolor="#e8e8f5", color="#5a5a9a"];
+  web  [label="bioconductor-website\nhow it is\nRENDERED",
+        fillcolor="#e8e8f5", color="#5a5a9a"];
+  inf  [label="private infra\nwhat is SERVED,\nat which route",
+        fillcolor="#e8e8f5", color="#5a5a9a"];
+  vis  [label="visitor", shape=ellipse, fillcolor="#f2f2f2", color="#888888"];
+
+  k1 [label="retires the three builders\nand the build system",
+      shape=box, style="filled", fillcolor="#fde2e2", color="#b23b3b", fontsize=11];
+  k2 [label="retires staging\nand master", shape=box, style="filled",
+      fillcolor="#fde2e2", color="#b23b3b", fontsize=11];
+  k3 [label="retires CloudFront, S3,\nand the OSN buckets", shape=box,
+      style="filled", fillcolor="#fde2e2", color="#b23b3b", fontsize=11];
+
+  { rank=same; ru; reg; web; inf; vis; }
+  { rank=same; k1; k2; k3; }
+
+  ru  -> reg [label=" observes "];
+  reg -> web [label=" data "];
+  web -> inf [label=" builds "];
+  inf -> vis [label=" pages "];
+
+  edge [style=dotted, color="#b23b3b", arrowhead=none, penwidth=1.2];
+  reg -> k1; web -> k2; inf -> k3;
+}

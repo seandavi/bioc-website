@@ -1,0 +1,574 @@
+---
+title: "bioconductor.org, rebuilt from primary sources"
+subtitle: "What it completes, what it opens up, and what it lets us switch off"
+author: "Sean Davis"
+date: 2026-08-17
+filters:
+  - at: pre-ast
+    path: livefigures
+livefigures:
+  theme: light
+format:
+  revealjs:
+    theme: default
+    slide-number: true
+    embed-resources: true
+    width: 1280
+    height: 760
+    incremental: false
+    fig-align: center
+    center-title-slide: true
+---
+
+## The problem, in one picture {.smaller}
+
+![](figures/circularity.dot){width=88%}
+
+The legacy build fetched `VIEWS` **from bioconductor.org**, converted it to
+`packages.json`, and rendered ~92,000 package pages from it.
+
+::: {.callout-important appearance="minimal"}
+Any migration plan that begins *"first, stand up the new site"* immediately
+discovers it cannot — because the new site's data source is the old site.
+:::
+
+---
+
+## What that circle costs us
+
+::: {.columns}
+::: {.column width="55%"}
+**The estate it holds in place**
+
+- Mac, Linux, Windows builders — three **purchased, physically maintained** boxes
+- Master webserver
+- Staging webserver
+- CloudFront + S3 bucket
+- Open Storage Network buckets for public assets
+:::
+::: {.column width="45%"}
+**The bill**
+
+[$5k]{style="font-size:3.4em; font-weight:700; line-height:1.15; display:block;"}
+
+per month, AWS alone — **~$60k/year**
+
+Before builder hardware, refresh cycles, or the staff time to keep three
+operating systems patched and building.
+:::
+:::
+
+---
+
+## The knot
+
+> The builders could not be retired without the website moving.
+>
+> The website could not move without a non-circular data source.
+
+. . .
+
+So nothing could be retired **individually** — the estate was jointly
+load-bearing, and the website was the thing holding it together.
+
+. . .
+
+**Untying that knot is what this work does.**
+
+---
+
+## Before and after {.smaller}
+
+![](figures/before-after.dot){width=90%}
+
+---
+
+# What we built
+
+---
+
+## Two halves, one seam
+
+![](figures/seam.noml){width=95%}
+
+Nothing downstream of the contract knows where the data came from.
+Nothing upstream knows how it is rendered.
+
+::: {.fragment}
+That seam is why the **same component** renders both the legacy-parity pages
+and the new `/next/` pages, unchanged.
+:::
+
+---
+
+## Where the data comes from now {.smaller}
+
+![](figures/origins.dot){width=93%}
+
+Every source is a **genuine origin** — the place the data is actually authored
+— and none of them is a machine we are trying to switch off.
+
+---
+
+## Origins, measured {.smaller}
+
+![](figures/origins-chart.vl.json){width=78%}
+
+::: {.callout-note appearance="minimal"}
+**3,772 of 3,804 packages** in release 3.23 now come from a real origin.
+The 32 that don't are named in `provenance.json`, not papered over.
+:::
+
+---
+
+## How annotation packages got a real origin
+
+r-universe covers Bioconductor **software** only. The other ~1,390 packages had
+no origin outside the site being rebuilt.
+
+. . .
+
+`DESCRIPTION` inside the source tarball **is** the real origin — the
+maintainer's own file. But downloading 1,392 tarballs means hundreds of
+gigabytes to read a few hundred bytes each.
+
+. . .
+
+::: {.callout-tip appearance="minimal"}
+**The trick:** `DESCRIPTION` sits near the front of the archive, gzip is a
+stream, and object stores serve ranged requests. Fetch the **first 64 KB**,
+inflate what that yields, walk the tar headers.
+
+**~0.1–0.2 s per package, bounded at 64 KB regardless of package size.**
+:::
+
+. . .
+
+Whole-archive facts the prefix cannot see are reported as **unavailable**,
+never guessed — guessing them `false` would silently drop documentation links
+from ~1,400 pages.
+
+---
+
+## Correctness is measured, not asserted {.smaller}
+
+::: {.columns}
+::: {.column width="50%"}
+### Precision
+Every URL we emit must exist upstream.
+
+*Inventing a URL is worse than omitting one — a 200 on a page the real site
+does not have is a silent wrong answer.*
+:::
+::: {.column width="50%"}
+### Recall
+Every URL upstream has must be emitted — reported **per page type**.
+
+*One number over a corpus that is 99% package pages would read as ~100% while
+every prose page was missing.*
+:::
+:::
+
+. . .
+
+::: {.callout-note appearance="minimal"}
+Release 3.23, diffed path-by-path against the legacy build:
+**7,614 identical paths. Zero spurious.**
+:::
+
+---
+
+## What it produces today {.smaller}
+
+| | |
+|---|---|
+| Package landing pages | **35 releases** (2.5–3.24), ~92,000 |
+| Page count vs. record count | **exact match**, everywhere |
+| Prose | 535 pages + 171 events, **~97%** resolved |
+| Full build | **~97,000 pages in ~60 seconds** |
+| Machines needed to build it | **one** — and no database |
+| Code | ~1,300 lines Python + ~2,000 Astro |
+| Runtime dependencies | **4** |
+| Search | build-time index, **no backend** |
+
+---
+
+# How it ships
+
+---
+
+## Publish, then decide what to serve
+
+![](figures/publish.dot){width=92%}
+
+::: {.callout-important appearance="minimal"}
+**This repo publishes builds. The Worker decides what is served.**
+Write access to the site repo never implies the power to change production.
+:::
+
+---
+
+## No flag day
+
+The Worker serves **mirrored legacy content** for everything not yet ported.
+
+. . .
+
+Routes flip to new builds **one surface at a time**.
+
+. . .
+
+Every flip is reversible in seconds — deploy is a pointer move, rollback is
+moving the pointer back.
+
+. . .
+
+::: {.callout-tip appearance="minimal"}
+This is the *strangler* pattern. There is no cutover weekend, and no moment
+where the project is betting on a single switch.
+:::
+
+---
+
+# Three projects, one estate
+
+---
+
+## Which repo retires which machine {.smaller}
+
+![](figures/division.dot){width=100%}
+
+**Define where the data comes from once, and let every consumer render it.**
+The website is one consumer — deliberately *not* the place where "what is true
+about a package" gets decided.
+
+---
+
+## bioc-registry: the connective tissue {.smaller}
+
+![](figures/registry.dot){width=92%}
+
+---
+
+## The repository is the point
+
+The old builders did not just build packages.
+
+. . .
+
+They produced **the repository** — `src/contrib`, `PACKAGES`, the thing
+`install.packages()` actually reads.
+
+. . .
+
+```r
+install.packages("edgeR",
+  repos = "https://bioc-registry.seandavi.workers.dev/repo/bioc")
+```
+
+::: {.callout-note appearance="minimal"}
+A data plane that emits an installable repository is what makes the builders
+**removable**, rather than merely unfashionable. This works today.
+:::
+
+---
+
+## The estate, mapped {.smaller}
+
+::: {.columns}
+::: {.column width="46%"}
+![](figures/estate.dot){width=100%}
+:::
+::: {.column width="54%"}
+<br>
+
+- **Staging webserver** — already redundant. Per-PR previews are strictly
+  better: one per change, isolated, identical to production output.
+
+- **Master** — its role as a *data source* is gone. What remains is serving
+  bytes. With staging, **about half the AWS bill.**
+
+- **CloudFront + S3** — like-for-like replacement, **no egress billing**.
+
+- **OSN buckets** — public assets on best-effort academic storage is exposure
+  with no upside. This is a storage swap, not a migration.
+:::
+:::
+
+---
+
+## Where the $60k goes {.smaller}
+
+::: {.columns}
+::: {.column width="50%"}
+### ~half — master + staging
+
+Substantial machines. Pure compute, for a workload that no longer needs a
+server at all.
+
+**A static build has no origin to run.** This is the half the website work
+retires directly.
+:::
+::: {.column width="50%"}
+### ~half — CloudFront + S3
+
+A package repository is **almost entirely egress** — "serve tarballs and static
+pages to the world" is the shape CloudFront bills most aggressively for.
+
+**R2 charges no egress fees.**
+:::
+:::
+
+. . .
+
+::: {.callout-note appearance="minimal"}
+The whole line is in scope — split about evenly between **two machines that stop
+existing** and **egress that stops being billed**. Storage is modest either way:
+the entire 35-release corpus is 175 MB.
+:::
+
+---
+
+# What this opens up
+
+---
+
+## Check results as a first-class page
+
+The legacy site **never built check pages.**
+
+. . .
+
+- `/next/{universe}/checkResults.html` — the check matrix, worst-first, with a
+  propagated-version column
+- `/next/{universe}/package/{pkg}.html` — a landing page per propagated package
+
+. . .
+
+Rendered through the **same component** as the parity pages.
+
+::: {.callout-tip appearance="minimal"}
+Version truth is the **propagation index** — not "whatever r-universe last
+built". Where the two disagree, the page says so in a banner rather than
+hiding it.
+:::
+
+---
+
+## Finding packages, and finding anything
+
+::: {.columns}
+::: {.column width="50%"}
+**Package finder**
+
+One box matching names, titles, and category terms. Category tree as facet
+navigation, results as a table.
+
+The legacy `#___Term` deep-link contract still works.
+
+*Deliberately the site's only hydrated island.*
+:::
+::: {.column width="50%"}
+**Site-wide search**
+
+A build-time index. No search service to run, fund, or monitor.
+
+*The legacy site's search needed a backend. This one needs a file.*
+:::
+:::
+
+---
+
+## The site becomes contributable
+
+Today, the number of people who can safely change bioconductor.org is bounded
+by who has access to the build host and knows nanoc, ERB, and Haml.
+
+. . .
+
+Under this model: **fork, edit, PR, preview URL, merge.**
+
+. . .
+
+Every pull request gets a preview that is byte-for-byte what production would
+serve — reviewable by anyone, requiring access to nothing.
+
+. . .
+
+::: {.callout-note appearance="minimal"}
+The same workflow the community already uses for packages.
+:::
+
+---
+
+## Questions we could not previously ask {.smaller}
+
+The logging built to keep download ranks alive lands something bigger: request
+logs that are **structured, queryable, and accumulating over time.**
+
+. . .
+
+::: {.columns}
+::: {.column width="33%"}
+### User journeys
+How do people actually move through the site? Where do they enter, and where
+do they give up?
+:::
+::: {.column width="33%"}
+### Hot vs. unused
+Which of ~97,000 pages carry the traffic? Which prose pages have not been read
+in a year?
+:::
+::: {.column width="33%"}
+### Change over time
+The same questions across releases — so a redesign's effect is **observed**,
+not argued about.
+:::
+:::
+
+. . .
+
+::: {.callout-tip appearance="minimal"}
+A daily job that emits a rank table cannot express any of these. A site with a
+measured usage distribution can be pruned and reorganised **on evidence**.
+:::
+
+---
+
+## Degradation as a property, not a hope
+
+- An r-universe outage degrades `/next/` pages to *"no download counts"* — it
+  never fails a build
+- Code highlighting happens at build time, so no page depends on a CDN being up
+  to render
+- jQuery is served from the vendored copy, not a 2011 Google CDN URL — one
+  fewer third-party origin
+
+. . .
+
+::: {.callout-tip appearance="minimal"}
+`just install && just data && just build` — no credentials, no build host, no
+database. Anyone can run the whole thing.
+:::
+
+---
+
+# What is not closed
+
+---
+
+## The annotation / experiment / workflow path {.smaller}
+
+Eliminating the builders is the plan. r-universe closes it for **software**.
+It does not cover the other three repositories — ~1,390 packages, a third of
+the corpus.
+
+. . .
+
+**This is the last thing standing between the estate and three fewer machines.**
+
+. . .
+
+::: {.callout-tip appearance="minimal"}
+The useful news: **the website does not constrain the answer.** Those pages
+already read `DESCRIPTION` from the tarballs, from a mirror.
+
+The site imposes exactly one requirement:
+
+> **the tarballs must be reachable over HTTP with ranged reads**
+
+Anything satisfying that keeps ~1,390 landing pages building unchanged — and
+bioc-registry's artifact store already provides it for software.
+:::
+
+---
+
+## Web stats: the input is already replaced {.smaller}
+
+The worrying version of this — *"turn off CloudFront and download ranks stop"* —
+**no longer applies.**
+
+. . .
+
+The new site already logs through the Worker to a **GCP bucket**, in the **same
+format as the CloudFront logs**. GCP for privacy control and BigQuery access.
+Capture is running today.
+
+. . .
+
+::: {.callout-note appearance="minimal"}
+What remains is porting the Flask/Postgres service that turns those logs into
+`Rank`. **Ordinary work, not a blocker** — on the list because it isn't done,
+not because it's hard.
+
+`bio-web-stats` is only *addressed* through the shared hostname — that route is
+a **must-preserve** item at cutover.
+:::
+
+---
+
+## Known and tracked {.smaller}
+
+| | |
+|---|---|
+| Markdown import of prose content | planned |
+| The cutover itself | planned |
+| Scheduled data-snapshot refresh | #5 |
+| Retention / GC for old builds | #2 |
+| Subdomain previews for PR links | #4 |
+| Scoped CI credentials, fork PRs | #3 |
+| CI secrets in a **Bioconductor-owned** location | #10 |
+| Nested `<html lang>` splits the search index | #11 |
+| Port `bio-web-stats` to the new log pipeline | input ready |
+| Three workflow packages with no tarball | recorded |
+| ~3% of prose pages still contain ERB | flagged |
+
+---
+
+## Where things stand
+
+::: {.columns}
+::: {.column width="50%"}
+### Done
+- 35 releases rebuild, **measured** against the real site
+- Every field sourced from a genuine origin (32 exceptions, named)
+- Prose, events, assets imported
+- CI, previews, immutable builds
+- Search, package finder
+- `/next/` check pages — **new capability**
+:::
+::: {.column width="50%"}
+### Open
+- Markdown import of prose
+- The cutover sequence
+- **The annotation / experiment / workflow build path**
+- Porting `bio-web-stats` (its input is already captured)
+- Secrets and credentials ownership
+:::
+:::
+
+---
+
+## The one-slide version {.smaller}
+
+::: {.r-fit-text}
+The website was the knot.
+:::
+
+<br>
+
+- It is untied: **no page is built from data the retiring machines produce**
+- Reproduction is **measured** — 7,614 identical paths, zero spurious
+- Serving is a pointer move, so the migration has **no flag day**
+- The staging box is **already** redundant; master, CloudFront, S3 and the OSN
+  buckets have ready replacements
+- **~$60k/year** of AWS is in scope — about half of it master and staging alone
+  — before hardware and staff time
+
+. . .
+
+::: {.callout-important appearance="minimal"}
+What remains between here and three fewer machines is a **package
+infrastructure** question — where annotation, experiment, and workflow packages
+get built — not a website one.
+:::
