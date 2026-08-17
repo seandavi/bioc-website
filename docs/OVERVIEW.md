@@ -277,6 +277,25 @@ No search service to run, fund, or monitor.
 on bioconductor.org is a pull request with a preview — reviewable by anyone,
 requiring access to nothing.
 
+**Analytics we could not previously ask for.** The Worker logs requests to a GCP
+bucket — chosen for privacy control and for BigQuery access — in the same format
+as the CloudFront logs it replaces. That was done to keep download ranks alive,
+but it lands something bigger: the logs are queryable, structured, and
+accumulating over time.
+
+That makes questions answerable that the old daily-Athena-job-to-a-rank-table
+pipeline could not express:
+
+- **User journeys** — how do people actually move through the site? Where do
+  they enter, and where do they give up?
+- **Hot versus unused pages** — which of the ~97,000 pages carry the traffic,
+  and which prose pages have not been read in a year? A site with a measured
+  usage distribution can be pruned and reorganised on evidence instead of
+  opinion.
+- **Change over time** — the same questions asked across releases, so the effect
+  of a redesign, a new landing-page layout, or a documentation push is
+  observable rather than argued about.
+
 **Graceful degradation as a property, not a hope.** An r-universe outage
 degrades `/next/` pages to "no download counts"; it never fails a build. Code
 highlighting happens at build time, so no page depends on a CDN being up to
@@ -349,7 +368,7 @@ order — which matters, because the website was the thing holding them together
 | **Staging webserver** | A second box to preview changes before publishing | **Per-PR preview URLs** — every pull request builds and publishes its own | **Already redundant.** A preview is byte-for-byte what production would serve, and there is one per PR rather than one shared machine |
 | **AWS S3 bucket + CloudFront** | Storage and CDN for the docroot and package archives | **R2 + Cloudflare** — no egress fees, same object model | Ready; tarballs already served from the mirror (`pipeline/net.py` defaults there, not to bioconductor.org) |
 | **Open Storage Network buckets** | Public-facing assets | **R2** | Ready — and the strongest single argument here: public assets on best-effort academic storage is a reliability and reputational exposure with no upside |
-| **`bio-web-stats`** (Flask/Postgres + daily Athena job over CloudFront logs) | Download ranks under `/packages/stats/*` | *Nothing yet* | Already an independent service — it answers `Server: waitress` while every other path answers `Server: Apache/2.4.52`. It is only *addressed* through the shared hostname, so **that route is a must-preserve item at cutover.** Its Athena input disappears with CloudFront and needs a replacement source |
+| **`bio-web-stats`** (Flask/Postgres + daily Athena job over CloudFront logs) | Download ranks under `/packages/stats/*` | **Worker logging → GCP bucket → BigQuery** (already running) | The log *input* is already replaced and format-compatible. The service itself still needs porting — straightforward work, but not yet done. It is only *addressed* through the shared hostname, so **that route is a must-preserve item at cutover** |
 
 ### Why the website was the blocker
 
@@ -402,10 +421,13 @@ question, not a website one.
   the tarballs as durable artifacts — the site imposes exactly one requirement:
   **the tarballs must be reachable over HTTP with ranged reads.** Anything
   satisfying that keeps ~1,392 landing pages building unchanged.
-- **Download ranks lose their input.** `bio-web-stats` is fed by an Athena job
-  over CloudFront logs. Turn off CloudFront and the pipeline that produces
-  `Rank` stops, even though the service itself is independent. A replacement
-  analytics source is needed before, not after.
+- **`bio-web-stats` still needs porting.** The alarming version of this — "turn
+  off CloudFront and download ranks stop" — no longer applies: the new Cloudflare
+  site already logs through the Worker to a GCP bucket, in the **same format as
+  the CloudFront logs**, with GCP chosen for privacy control and BigQuery access.
+  The input is captured and running. What remains is replacing the Flask/Postgres
+  service that turns those logs into `Rank`, which is ordinary work rather than a
+  blocker. It is on the list because it is not done, not because it is hard.
 - **Three workflow packages** exist in `VIEWS` with no tarball in `src/contrib`.
   They have landing pages today and would not from tarballs alone.
 
@@ -416,18 +438,20 @@ alone: it does not include the three builder boxes, which are capital purchases
 on a refresh cycle plus the staff time to keep three different operating systems
 patched and building.
 
-The replacement is a Cloudflare Worker in front of R2. R2 charges no egress
-fees, which matters disproportionately here because a package repository is
-almost entirely egress — the workload is "serve tarballs and static pages to the
-world", which is precisely the shape CloudFront bills most aggressively for.
-Storage volume is modest by comparison: the entire 35-release data corpus this
-site builds from is 175 MB.
+Roughly **half of that is master and staging** — they are substantial machines,
+and they are pure compute for a workload that no longer needs a server at all.
+That half is the part this repo's work retires directly: a static build has no
+origin to run.
 
-> **[NEEDS FIGURES]** Worth having on the slide if you can get them: the split
-> of that $5k across storage, egress, and compute — the egress share is the part
-> that goes to zero, so the split determines whether the saving is most of the
-> line or half of it. Also useful: the builder refresh cycle and any purchase
-> already due, and the staff time those three boxes consume.
+The other half is CloudFront and the S3 bucket. R2 replaces both, and charges
+**no egress fees** — which matters disproportionately here, because a package
+repository is almost entirely egress. "Serve tarballs and static pages to the
+world" is precisely the shape CloudFront bills most aggressively for. Storage
+volume is modest by comparison: the entire 35-release data corpus this site
+builds from is 175 MB.
+
+So the whole $5k line is in scope, split about evenly between *two machines that
+stop existing* and *egress that stops being billed*.
 
 ---
 
@@ -439,6 +463,7 @@ Tracked in the open issues; nothing here is a surprise.
 |---|---|
 | One-time markdown import of prose content into this repo (after which content changes happen here by PR) | — |
 | The cutover itself: the legacy site remains the production origin | — |
+| Porting `bio-web-stats` to the new log pipeline (input already captured) | — |
 | Data snapshot refresh is manual; should be scheduled | [#5](https://github.com/seandavi/bioconductor-website/issues/5) |
 | Retention/GC for old `site/<sha>` builds | [#2](https://github.com/seandavi/bioconductor-website/issues/2) |
 | Subdomain previews — internal links currently escape the preview onto the mirrored site | [#4](https://github.com/seandavi/bioconductor-website/issues/4) |
