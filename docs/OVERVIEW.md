@@ -31,7 +31,8 @@ Three consequences follow:
    data the old host publishes, the host is serving traffic and nothing else —
    and traffic is the easy part to replace. The staging webserver is already
    redundant; the master, CloudFront, the S3 bucket, and the Open Storage
-   Network buckets have ready replacements. See
+   Network buckets have ready replacements; and the website no longer depends
+   on anything the builders produce. See
    [Legacy infrastructure](#legacy-infrastructure-and-decommissioning) for what
    this does and does not close.
 2. **The site becomes contributable.** A pull request produces a preview URL of
@@ -296,7 +297,7 @@ order — which matters, because the website was the thing holding them together
 
 | Component | What it does | Replaced by | Status |
 |---|---|---|---|
-| **Mac / Linux / Windows builders** | Three purchased, physically maintained boxes that build and check every package | **r-universe** (software packages) | Migrated for software; annotation/experiment/workflow builds are the residue — see below |
+| **Mac / Linux / Windows builders** | Three purchased, physically maintained boxes that build and check every package | **r-universe** | **Elimination is the plan.** Software packages are migrated. The path for annotation, experiment, and workflow packages is the open workstream — see below |
 | **Master webserver** | The main origin, Apache, serving the nanoc docroot | **Cloudflare Worker + R2**, serving immutable static builds | Ready; awaiting cutover |
 | **Staging webserver** | A second box to preview changes before publishing | **Per-PR preview URLs** — every pull request builds and publishes its own | **Already redundant.** A preview is byte-for-byte what production would serve, and there is one per PR rather than one shared machine |
 | **AWS S3 bucket + CloudFront** | Storage and CDN for the docroot and package archives | **R2 + Cloudflare** — no egress fees, same object model | Ready; tarballs already served from the mirror (`pipeline/net.py` defaults there, not to bioconductor.org) |
@@ -320,6 +321,11 @@ this repo unties. With provenance moved to r-universe and to maintainers' own
 produce — and the remaining components become individually retirable rather
 than jointly load-bearing.
 
+Concretely: the website is no longer a reason to keep any of these machines
+running. What remains between here and three fewer boxes is the build path for
+the annotation, experiment, and workflow repositories — a package-infrastructure
+question, not a website one.
+
 ### What this closes, and what it does not
 
 **Closes:**
@@ -335,13 +341,20 @@ than jointly load-bearing.
 
 **Does not close — stated plainly:**
 
-- **r-universe covers Bioconductor *software* only.** Annotation, experiment,
-  and workflow packages — about 1,392, roughly a third of the corpus — are
-  still built and published the old way. This repo removed the website's
-  *metadata* dependency on them (by reading `DESCRIPTION` out of the tarballs),
-  but something still has to build and host those tarballs. **Retiring the
-  builders entirely is not closed by r-universe alone**, and any plan that
-  assumes otherwise will discover this late.
+- **The annotation, experiment, and workflow path.** Eliminating the builders is
+  the plan, and r-universe closes it for software packages. It does not cover
+  the other three repositories — about 1,392 packages, roughly a third of the
+  corpus — so where those get built and hosted is an open workstream, and the
+  last one standing between the estate and three fewer machines.
+
+  The useful news is that **the website does not constrain the answer.** Page
+  metadata for those packages already comes from `DESCRIPTION` inside the source
+  tarballs, not from any build system's index, and the pipeline already reads
+  them from a mirror rather than from bioconductor.org. Whatever the decision —
+  r-universe universes for data packages, a reduced build path, or publishing
+  the tarballs as durable artifacts — the site imposes exactly one requirement:
+  **the tarballs must be reachable over HTTP with ranged reads.** Anything
+  satisfying that keeps ~1,392 landing pages building unchanged.
 - **Download ranks lose their input.** `bio-web-stats` is fed by an Athena job
   over CloudFront logs. Turn off CloudFront and the pipeline that produces
   `Rank` stops, even though the service itself is independent. A replacement
