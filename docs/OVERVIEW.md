@@ -29,7 +29,11 @@ Three consequences follow:
 
 1. **The old infrastructure becomes retirable.** Once no page is built from
    data the old host publishes, the host is serving traffic and nothing else —
-   and traffic is the easy part to replace.
+   and traffic is the easy part to replace. The staging webserver is already
+   redundant; the master, CloudFront, the S3 bucket, and the Open Storage
+   Network buckets have ready replacements. See
+   [Legacy infrastructure](#legacy-infrastructure-and-decommissioning) for what
+   this does and does not close.
 2. **The site becomes contributable.** A pull request produces a preview URL of
    exactly what production would serve. No build machine, no credentials, no
    Ruby toolchain.
@@ -62,9 +66,16 @@ offline, and produce the same pages.
 
 ### The scalability and cost problem
 
-The legacy stack is a single build host producing a docroot that a single
-origin serves. Scaling it means scaling that machine. Publishing a fix means a
-full site build on that machine. Rolling back means rebuilding.
+The legacy estate is three purchased and physically maintained builder boxes
+(Mac, Linux, Windows), a master webserver, a staging webserver, CloudFront, an
+S3 bucket, and — for public-facing assets — Open Storage Network buckets.
+Scaling any of it means buying and maintaining more of it. Publishing a fix
+means a full site build on the master. Rolling back means rebuilding. Previewing
+a change means contending for the one staging box.
+
+The AWS portion of that is about **$5,000/month, roughly $60,000/year** — before
+counting the builder hardware or the staff time to keep three operating systems
+patched and building.
 
 The static model has a different shape: builds are content-addressed and
 immutable, deploy is a pointer move, rollback is moving the pointer back, and
@@ -278,32 +289,85 @@ credentials, no build host, no database.
 
 ## Legacy infrastructure and decommissioning
 
-> **[NEEDS FACTS — Sean]** This section states the decommissioning case in
-> concrete terms. To fill it in I need, roughly:
->
-> - What runs on AWS today and what each piece does (build/master host, the
->   Apache origin, S3/CloudFront, the `bio-web-stats` Flask/Postgres service and
->   its daily Athena job over CloudFront logs, mirrors, anything else).
-> - Approximate annual cost, and the split between compute, storage, and egress.
-> - Ops burden: who maintains it, what breaks, what the on-call surface is.
-> - Which pieces this repo's work makes redundant, which are already
->   independent (`bio-web-stats` appears to be), and which have no replacement
->   yet.
-> - Any dates or commitments already made to the advisory groups.
->
-> What the repo itself can already evidence, and what this section will build on:
->
-> - The website's data dependency on the legacy host is removed for software
->   packages (r-universe) and for annotation/experiment/workflow packages
->   (tarball `DESCRIPTION`), with a named, measured residue.
-> - Prose, assets, and the biocViews vocabulary come from git repos that are
->   unaffected by host retirement.
-> - Package tarballs are already served from a mirror in object storage
->   (`pipeline/net.py` defaults there, not to bioconductor.org).
-> - `/packages/stats/*` answers with `Server: waitress` while every other path
->   answers `Server: Apache/2.4.52` — so the stats service is already decoupled
->   from the main origin and is only *addressed* through the shared hostname.
->   That routing is a must-preserve item at cutover.
+The estate being retired has three layers, and they came apart in a specific
+order — which matters, because the website was the thing holding them together.
+
+### The estate today
+
+| Component | What it does | Replaced by | Status |
+|---|---|---|---|
+| **Mac / Linux / Windows builders** | Three purchased, physically maintained boxes that build and check every package | **r-universe** (software packages) | Migrated for software; annotation/experiment/workflow builds are the residue — see below |
+| **Master webserver** | The main origin, Apache, serving the nanoc docroot | **Cloudflare Worker + R2**, serving immutable static builds | Ready; awaiting cutover |
+| **Staging webserver** | A second box to preview changes before publishing | **Per-PR preview URLs** — every pull request builds and publishes its own | **Already redundant.** A preview is byte-for-byte what production would serve, and there is one per PR rather than one shared machine |
+| **AWS S3 bucket + CloudFront** | Storage and CDN for the docroot and package archives | **R2 + Cloudflare** — no egress fees, same object model | Ready; tarballs already served from the mirror (`pipeline/net.py` defaults there, not to bioconductor.org) |
+| **Open Storage Network buckets** | Public-facing assets | **R2** | Ready — and the strongest single argument here: public assets on best-effort academic storage is a reliability and reputational exposure with no upside |
+| **`bio-web-stats`** (Flask/Postgres + daily Athena job over CloudFront logs) | Download ranks under `/packages/stats/*` | *Nothing yet* | Already an independent service — it answers `Server: waitress` while every other path answers `Server: Apache/2.4.52`. It is only *addressed* through the shared hostname, so **that route is a must-preserve item at cutover.** Its Athena input disappears with CloudFront and needs a replacement source |
+
+### Why the website was the blocker
+
+Three physical builders, two webservers, a CDN, and two sets of buckets is a
+lot of surface for a project whose actual product is packages. The obvious move
+— let r-universe build the packages and put the site on object storage — was
+blocked by one thing: **the website's package pages were generated from data
+the master webserver published.** Retire the master and ~92,000 pages lose
+their source. Move to r-universe and the site still reads `VIEWS` off the old
+host anyway.
+
+So the builders could not be retired without the website moving, and the
+website could not move without a non-circular data source. That is the knot
+this repo unties. With provenance moved to r-universe and to maintainers' own
+`DESCRIPTION` files, the site no longer reads anything the retiring hosts
+produce — and the remaining components become individually retirable rather
+than jointly load-bearing.
+
+### What this closes, and what it does not
+
+**Closes:**
+
+- The staging webserver has no remaining job. Per-PR previews are strictly
+  better: isolated, one per change, and identical to production output.
+- The master webserver's role as a *data source* is gone. Its remaining role is
+  serving bytes, which R2 and a Worker do without a machine to maintain.
+- CloudFront and the S3 bucket have a like-for-like replacement with no egress
+  billing.
+- The Open Storage Network dependency for public assets can end today; it is a
+  storage swap, not a migration.
+
+**Does not close — stated plainly:**
+
+- **r-universe covers Bioconductor *software* only.** Annotation, experiment,
+  and workflow packages — about 1,392, roughly a third of the corpus — are
+  still built and published the old way. This repo removed the website's
+  *metadata* dependency on them (by reading `DESCRIPTION` out of the tarballs),
+  but something still has to build and host those tarballs. **Retiring the
+  builders entirely is not closed by r-universe alone**, and any plan that
+  assumes otherwise will discover this late.
+- **Download ranks lose their input.** `bio-web-stats` is fed by an Athena job
+  over CloudFront logs. Turn off CloudFront and the pipeline that produces
+  `Rank` stops, even though the service itself is independent. A replacement
+  analytics source is needed before, not after.
+- **Three workflow packages** exist in `VIEWS` with no tarball in `src/contrib`.
+  They have landing pages today and would not from tarballs alone.
+
+### The cost
+
+**AWS runs about $5,000/month — roughly $60,000/year.** That is the cloud line
+alone: it does not include the three builder boxes, which are capital purchases
+on a refresh cycle plus the staff time to keep three different operating systems
+patched and building.
+
+The replacement is a Cloudflare Worker in front of R2. R2 charges no egress
+fees, which matters disproportionately here because a package repository is
+almost entirely egress — the workload is "serve tarballs and static pages to the
+world", which is precisely the shape CloudFront bills most aggressively for.
+Storage volume is modest by comparison: the entire 35-release data corpus this
+site builds from is 175 MB.
+
+> **[NEEDS FIGURES]** Worth having on the slide if you can get them: the split
+> of that $5k across storage, egress, and compute — the egress share is the part
+> that goes to zero, so the split determines whether the saving is most of the
+> line or half of it. Also useful: the builder refresh cycle and any purchase
+> already due, and the staff time those three boxes consume.
 
 ---
 
