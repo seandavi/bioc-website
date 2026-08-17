@@ -74,7 +74,7 @@ Scaling any of it means buying and maintaining more of it. Publishing a fix
 means a full site build on the master. Rolling back means rebuilding. Previewing
 a change means contending for the one staging box.
 
-The AWS portion of that is about **$5,000/month, roughly $60,000/year** — before
+The AWS portion of that is about **$2,500/month, roughly $30,000/year** — before
 counting the builder hardware or the staff time to keep three operating systems
 patched and building.
 
@@ -92,6 +92,34 @@ rather than a shared surface.
 
 Under this model the site is a repo: fork, edit, PR, preview URL, merge. The
 same workflow the community already uses for packages.
+
+### Before and after
+
+```mermaid
+flowchart TB
+  subgraph before ["TODAY — 5 machines we run, 1 circular dependency"]
+    direction TB
+    bm(["maintainers"]) --> bb["Mac · Linux · Windows builders<br/>3 physical machines"]
+    bb -- "packages" --> bmst["master webserver<br/>builds the docroot"]
+    bmst <-- "published, then read back<br/>to build the pages" --> bv["VIEWS<br/>published by the site"]
+    bmst --> bcf["CloudFront + S3"]
+    bstg["staging webserver<br/>one shared preview"] -.-> bcf
+    bcf --> bvis(["visitor"])
+    bosn["OSN buckets<br/>public assets"] -.-> bvis
+  end
+  subgraph after ["AFTER — 0 machines we run, no cycle"]
+    direction TB
+    am(["maintainers"]) --> ar["r-universe<br/>builds packages"]
+    ar -- "observed" --> areg["bioc-registry<br/>the propagation gate"]
+    areg -. "install.packages()" .-> arep["installable R repository"]
+    areg -- "data" --> abld["static site build<br/>CI, ~60 s"]
+    abld --> ar2[("R2<br/>immutable builds")]
+    ar2 --> awk["Cloudflare Worker<br/>owns the route table"]
+    awk --> avis(["visitor"])
+  end
+```
+
+Same job. One direction of flow, and nothing left to rack.
 
 ---
 
@@ -433,7 +461,7 @@ question, not a website one.
 
 ### The cost
 
-**AWS runs about $5,000/month — roughly $60,000/year.** That is the cloud line
+**AWS runs about $2,500/month — roughly $30,000/year.** That is the cloud line
 alone: it does not include the three builder boxes, which are capital purchases
 on a refresh cycle plus the staff time to keep three different operating systems
 patched and building.
@@ -450,7 +478,7 @@ world" is precisely the shape CloudFront bills most aggressively for. Storage
 volume is modest by comparison: the entire 35-release data corpus this site
 builds from is 175 MB.
 
-So the whole $5k line is in scope, split about evenly between *two machines that
+So the whole line is in scope, split about evenly between *two machines that
 stop existing* and *egress that stops being billed*.
 
 ---
