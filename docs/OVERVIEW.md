@@ -74,7 +74,7 @@ Scaling any of it means buying and maintaining more of it. Publishing a fix
 means a full site build on the master. Rolling back means rebuilding. Previewing
 a change means contending for the one staging box.
 
-The AWS portion of that is about **$2,500/month, roughly $30,000/year** — before
+The AWS portion of that is about **$5,000/month, roughly $60,000/year** — before
 counting the builder hardware or the staff time to keep three operating systems
 patched and building.
 
@@ -461,7 +461,7 @@ question, not a website one.
 
 ### The cost
 
-**AWS runs about $2,500/month — roughly $30,000/year.** That is the cloud line
+**AWS runs about $5,000/month — roughly $60,000/year.** That is the cloud line
 alone: it does not include the three builder boxes, which are capital purchases
 on a refresh cycle plus the staff time to keep three different operating systems
 patched and building.
@@ -478,7 +478,7 @@ world" is precisely the shape CloudFront bills most aggressively for. Storage
 volume is modest by comparison: the entire 35-release data corpus this site
 builds from is 175 MB.
 
-So the whole line is in scope, split about evenly between *two machines that
+So the whole $5k line is in scope, split about evenly between *two machines that
 stop existing* and *egress that stops being billed*.
 
 ---
