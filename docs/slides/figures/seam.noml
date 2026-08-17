@@ -1,0 +1,23 @@
+#direction: right
+#spacing: 45
+#padding: 14
+#fontSize: 14
+#lineWidth: 2
+#fill: #eef2fb
+#.contract: fill=#fff3d6 visual=database bold
+
+[pipeline|
+decides WHERE
+data comes from|
+Python, ~1,300 lines]
+
+[<contract> astro/data/|
+THE CONTRACT]
+
+[renderer|
+decides HOW
+it is rendered|
+Astro, ~2,000 lines]
+
+[pipeline] -> [astro/data/]
+[astro/data/] -> [renderer]

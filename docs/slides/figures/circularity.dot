@@ -1,0 +1,20 @@
+digraph circularity {
+  graph [rankdir=LR, bgcolor=transparent, fontname="Helvetica", nodesep=0.6];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica",
+         fontsize=13, penwidth=1.4, margin="0.20,0.14"];
+  edge  [fontname="Helvetica", fontsize=11, penwidth=1.4, color="#b23b3b"];
+
+  master [label="master webserver\n(the machine we want to retire)",
+          fillcolor="#fde2e2", color="#b23b3b"];
+  build  [label="nanoc build\nreads VIEWS", fillcolor="#f2f2f2", color="#888888"];
+  pages  [label="~92,000\npackage landing pages", fillcolor="#f2f2f2", color="#888888"];
+
+  master -> build [label="  publishes VIEWS"];
+  build  -> pages [label="  renders", color="#888888"];
+  pages  -> master [label="  served from  ", constraint=false];
+
+  label = "The site's content was derived from the site's own output.";
+  labelloc = b;
+  fontsize = 13;
+  fontcolor = "#b23b3b";
+}

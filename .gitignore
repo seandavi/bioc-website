@@ -2,3 +2,11 @@
 .cache/
 __pycache__/
 *.pyc
+
+# Quarto deck (docs/slides): vendored extension, render cache, and build output.
+# Run `quarto add seandavi/quarto-livefigures` in docs/slides/ to restore.
+docs/slides/_extensions/
+docs/slides/.quarto/
+docs/slides/_livefigures/
+docs/slides/*.html
+docs/slides/slides_files/

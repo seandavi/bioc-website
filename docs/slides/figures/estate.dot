@@ -1,0 +1,31 @@
+digraph estate {
+  graph [rankdir=LR, bgcolor=transparent, fontname="Helvetica",
+         nodesep=0.30, ranksep=1.6];
+  node  [shape=box, style="rounded,filled", fontname="Helvetica",
+         fontsize=12, penwidth=1.3, margin="0.18,0.12"];
+  edge  [penwidth=1.4, color="#4a7a4a", arrowsize=0.8];
+
+  subgraph cluster_old {
+    label = "today"; fontsize=13; fontcolor="#b23b3b";
+    color="#e8b4b4"; style="rounded";
+    b1 [label="Mac builder", fillcolor="#fde2e2", color="#b23b3b"];
+    b2 [label="Linux builder", fillcolor="#fde2e2", color="#b23b3b"];
+    b3 [label="Windows builder", fillcolor="#fde2e2", color="#b23b3b"];
+    st [label="staging webserver", fillcolor="#fde2e2", color="#b23b3b"];
+    ms [label="master webserver", fillcolor="#fde2e2", color="#b23b3b"];
+    cf [label="CloudFront + S3", fillcolor="#fde2e2", color="#b23b3b"];
+    os [label="Open Storage Network\nbuckets", fillcolor="#fde2e2", color="#b23b3b"];
+  }
+
+  subgraph cluster_new {
+    label = "replacement"; fontsize=13; fontcolor="#4a7a4a";
+    color="#b4d4b4"; style="rounded";
+    ru  [label="r-universe\n+ bioc-registry", fillcolor="#e3f0e3", color="#4a7a4a"];
+    pr  [label="per-PR preview URLs", fillcolor="#e3f0e3", color="#4a7a4a"];
+    wk  [label="Cloudflare Worker\n+ R2", fillcolor="#e3f0e3", color="#4a7a4a"];
+  }
+
+  b1 -> ru; b2 -> ru; b3 -> ru;
+  st -> pr;
+  ms -> wk; cf -> wk; os -> wk;
+}
