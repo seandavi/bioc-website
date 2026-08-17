@@ -288,6 +288,53 @@ credentials, no build host, no database.
 
 ---
 
+## Division of labour: which repo retires which machine
+
+The migration is not one project. It is three, each answering a different
+question, each retiring a different part of the estate. They meet at data
+contracts rather than at shared machines, which is why they can proceed
+independently.
+
+| Repo | Answers | Retires |
+|---|---|---|
+| **bioc-registry** | *Where does package data come from, and which build is fit to publish?* | The three builders and the legacy build system |
+| **bioconductor-website** (this repo) | *How is that data rendered?* | The staging and master webservers |
+| **private infra repo** | *What is served at which route?* | CloudFront, the S3 bucket, the Open Storage Network buckets |
+
+The organising principle is the same one that shows up inside this repo as the
+`astro/data/` seam, applied one level up: **define where the data comes from
+once, and let every consumer render it.** The website is one consumer. It is not
+a privileged one, and it is deliberately not the place where "what is true about
+a package" gets decided.
+
+[bioc-registry](https://github.com/seandavi/bioc-registry) is what connects
+r-universe to everything downstream. It polls the r-universe build system every
+15 minutes, keeps every observation permanently, evaluates a **propagation
+gate** to decide which builds are fit to publish, and then serves the result
+three ways from the same store:
+
+- **as website data** — what `/next/` renders here;
+- **as an installable R repository** — `install.packages(repos = ".../repo/bioc")`
+  works today;
+- **as a queryable Parquet archive** — every check verdict, readable straight
+  from DuckDB with no download step.
+
+That second one matters more than it looks. The old builders did not just build
+packages; they produced *the repository* — `src/contrib`, `PACKAGES`, the thing
+`install.packages()` reads. A data plane that emits an installable repository is
+what makes the builders removable rather than merely unfashionable.
+
+It also answers the one requirement the website places on whatever replaces the
+build system — tarballs reachable over HTTP with ranged reads (see
+[the open workstream](#what-this-closes-and-what-it-does-not)). That is
+precisely what bioc-registry's content-addressed artifact store and repository
+endpoint already provide for software packages. The pattern for
+annotation, experiment, and workflow packages is therefore not hypothetical;
+it exists and runs. What is undecided is how those three repositories get their
+builds *into* it.
+
+---
+
 ## Legacy infrastructure and decommissioning
 
 The estate being retired has three layers, and they came apart in a specific
@@ -430,7 +477,7 @@ while the chrome matches.
 |---|---|
 | this one | Renderer + pipeline; **publishes builds** |
 | private infra repo | Cloudflare Worker, R2 storage, legacy-content sync, route table — **decides what production serves** |
-| bioc-registry data plane | Observes r-universe builds, evaluates the propagation gate, publishes what `/next/` renders |
+| [bioc-registry](https://github.com/seandavi/bioc-registry) | Polls r-universe, keeps every observation, evaluates the propagation gate — **decides what is true about a package**, and serves it as website data, as an installable R repository, and as a Parquet archive |
 | `Bioconductor/bioconductor.org` | The legacy nanoc site; still the home of prose content until the markdown import lands |
 
 ---
