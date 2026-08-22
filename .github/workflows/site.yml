@@ -89,3 +89,46 @@ jobs:
             } else {
               await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
             }
+
+      # Checks run after publish so the preview is already up -- a red check
+      # never blocks looking at the thing it complains about. (#17)
+
+      - name: Internal links on template pages
+        if: github.event_name == 'pull_request'
+        working-directory: astro
+        # Offline against dist, scoped to what dist actually owns: the Worker
+        # also serves the 5 TB R2 mirror, so package-detail subtrees and
+        # mirror-served paths are undecidable offline and excluded here -- the
+        # daily links.yml checks those against the real host. The excluded
+        # package-page link classes are known-broken content debt: #19, #20.
+        # Narrow the excludes when those close.
+        run: |
+          curl -fsSL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-gnu.tar.gz |
+            tar xz --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
+          REL=$(ls dist/packages | grep -E '^[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          PKG=$(ls "dist/packages/$REL/bioc/html" | head -1)
+          ./lychee --offline --root-dir "$PWD/dist" --no-progress \
+            --exclude 'packages/[0-9.]+/(bioc|data|workflows)/' \
+            --exclude 'packages/(release|devel|stats)(/|$)' \
+            --exclude '/checkResults$' --exclude '/dashboard$' \
+            --exclude '/about/annual-reports$' --exclude '/developers/help_wanted$' \
+            --exclude 'support\.bioconductor\.org' \
+            dist/index.html dist/install/index.html dist/about/index.html \
+            dist/help/index.html dist/developers/index.html dist/next.html \
+            "dist/packages/$REL/BiocViews.html" "dist/packages/$REL/bioc/html/$PKG"
+
+      - name: Accessibility on template pages
+        if: github.event_name == 'pull_request'
+        # Non-blocking while the baseline is dirty (every template page has
+        # WCAG2AA findings today). Flip to blocking once the baseline is clean.
+        continue-on-error: true
+        working-directory: astro
+        run: |
+          python3 -m http.server 8080 -d dist &
+          REL=$(ls dist/packages | grep -E '^[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          PKG=$(ls "dist/packages/$REL/bioc/html" | head -1)
+          PUPPETEER_SKIP_DOWNLOAD=1 npx -y pa11y-ci --config .pa11yci.json \
+            http://localhost:8080/ http://localhost:8080/install/ \
+            http://localhost:8080/help/ http://localhost:8080/next.html \
+            "http://localhost:8080/packages/$REL/BiocViews.html" \
+            "http://localhost:8080/packages/$REL/bioc/html/$PKG"
