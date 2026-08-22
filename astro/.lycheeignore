@@ -1,0 +1,14 @@
+# Known link rot inherited from imported legacy prose, one regex per line.
+# Cataloged in issue #23; the prose source is a build-time snapshot, so these
+# aren't fixable by PR until the M2 prose import. New rot = red links badge =
+# fix it or add it here WITH an issue reference. Delete lines as pages get
+# rewritten.
+/images/favicon\.ico$
+/help/faq/4$
+comments\.gmane\.org
+www\.eurac\.edu/en/research/health/biomed/staff
+www\.thekids\.org\.au/contact-us/our-people/p/stephen-stevie-pederson
+www\.deduveinstitute\.be/fr/research/computational-biology/laurent-gatto
+/packages/bioc/1\.[567]/src/contrib/html/
+/packages/3\.14/workflow/html/proteomics\.html
+journal\.r-project\.org/archive/2011-1/RJournal_2011-1_Wickham\.pdf
