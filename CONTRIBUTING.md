@@ -42,3 +42,7 @@ the live site) if you only want to touch the renderer.
 
 This project follows the
 [Bioconductor Code of Conduct](CODE_OF_CONDUCT.md).
+
+## License
+
+Contributions are accepted under the [Apache License 2.0](LICENSE).

@@ -1,4 +1,6 @@
-# bioconductor-website
+# bioc-website
+
+[![site](https://github.com/seandavi/bioc-website/actions/workflows/site.yml/badge.svg)](https://github.com/seandavi/bioc-website/actions/workflows/site.yml)
 
 The next-generation [bioconductor.org](https://bioconductor.org) site: a static
 Astro build fed by a small Python pipeline, replacing the legacy nanoc site.
