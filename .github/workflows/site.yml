@@ -125,10 +125,12 @@ jobs:
         continue-on-error: true
         working-directory: astro
         run: |
-          set -o pipefail
           python3 -m http.server 8080 -d dist &
           REL=$(ls dist/packages | grep -E '^[0-9]+\.[0-9]+$' | sort -V | tail -1)
           PKG=$(ls "dist/packages/$REL/bioc/html" | head -1)
+          # pipefail only from here: `ls | head -1` above dies of SIGPIPE
+          # under pipefail, which silently killed this step once already.
+          set -o pipefail
           PUPPETEER_SKIP_DOWNLOAD=1 npx -y pa11y-ci --config .pa11yci.json \
             http://localhost:8080/ http://localhost:8080/install/ \
             http://localhost:8080/help/ http://localhost:8080/next.html \
