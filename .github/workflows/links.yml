@@ -1,10 +1,21 @@
-# Daily link-rot check over a sample of the built site. (#18)
+# Daily link-rot check over the maintained pages of the served site. (#18)
 #
-# Pages come from a fresh build, but links are resolved against the served
-# dev host (--base-url): the Worker serves more than dist -- the R2 mirror --
-# so mirror-backed internal links resolve for real, and external links get
-# checked from live HTML. External links rot independently of commits, hence
-# a schedule rather than a PR check. The badge is the alert.
+# A fresh build enumerates the pages; the checks then run against the served
+# dev host, where mirror-backed internal links resolve for real and external
+# links are checked from live HTML. External links rot independently of
+# commits, hence a schedule rather than a PR check. The badge is the alert.
+#
+# Deliberately NOT checked (calibrated 2026-08-22 against the full site):
+#   - archival prose (course-materials, news, newsletters, publications, and
+#     the dead-tech help/ subtrees): frozen history whose external rot nobody
+#     will fix -- the July 2026 legacy audit already cataloged it
+#   - package-detail link classes known broken by construction: #19, #20
+#   - /next package pages and their r-universe vignette links: #22 (also
+#     unstable inputs -- built from live registry data, so a fresh page list
+#     can name pages the deployed build doesn't have yet)
+#   - specific inherited-rot URLs: astro/.lycheeignore, cataloged in #23
+# Known residual: a page that 404s as an *input* aborts lychee with a terse
+# "Cannot read input content" error -- red badge, look for the 404 input.
 name: links
 
 on:
@@ -56,27 +67,33 @@ jobs:
           key: lychee-${{ github.run_id }}
           restore-keys: lychee-
 
-      - name: Check links on a daily sample
+      - name: Check links on the maintained pages
         working-directory: astro
-        # Fixed core pages + a date-seeded random sample (deterministic within
-        # the day, so a failure reproduces on re-run; the sampled list is in
-        # the log). Excluded: the known-broken package-detail link classes
-        # (#19, #20) and social hosts that always block bots. 429 accepted --
-        # rate-limited is not broken.
+        # Deployed URLs as inputs (not local files + --base-url: that flattens
+        # page-relative links against the site root and reports false 404s).
+        # 403 accepted -- stackoverflow/biostars-style bot-blocking, not rot;
+        # 429 accepted -- rate-limited is not broken. The two grep -v'd pages
+        # are redirect-shadowed on the worker (bioc-edge#3) so their dist
+        # copies aren't what's served.
         run: |
           curl -fsSL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-gnu.tar.gz |
             tar xz --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
-          { printf '%s\n' dist/index.html dist/install/index.html \
-              dist/about/index.html dist/help/index.html \
-              dist/developers/index.html dist/next.html
-            find dist -name '*.html' | shuf -n 150 --random-source=<(yes "$(date +%F)")
-          } | sort -u | tee pages.txt
-          ./lychee --no-progress --base-url https://bioc-dev.cancerdatasci.org/ \
-            --root-dir "$PWD/dist" \
+          { find dist -name '*.html' ! -path 'dist/packages/*' \
+              ! -path 'dist/help/course-materials/*' ! -path 'dist/news/*' \
+              ! -path 'dist/next/*'
+            find dist/next -name '*.html' ! -path 'dist/next/*/package/*'
+          } | grep -vE '/help/(newsletters|publications|community|cabig|elasticmapreduce|cloud|bioconductor-cloud-ami|docker|bioconductor-books)/' \
+            | grep -vE '/developers/how-to/(git-mirrors|long-tests)/' \
+            | sed 's|^dist|https://bioc-dev.cancerdatasci.org|' | sort -u | tee pages.txt
+          ./lychee --no-progress \
             --cache --max-cache-age 14d \
             --max-concurrency 8 --timeout 20 \
-            --accept '100..=103,200..=299,429' \
+            --accept '100..=103,200..=299,403,429' \
             --user-agent 'bioc-website-linkcheck/0.1 (+https://github.com/seandavi/bioc-website)' \
-            --exclude 'packages/[0-9.]+/(bioc|data|workflows)/html/' \
+            --exclude 'packages/[0-9.]+/(bioc|data/annotation|data/experiment|workflows)/html/' \
+            --exclude 'next/[^/]+/package/' \
+            --exclude 'r-universe\.dev/articles/' \
+            --exclude '/developers/how-to/(git-mirrors|long-tests)' \
+            --exclude 'contributions\.bioconductor\.org/long-tests' \
             --exclude 'twitter\.com|x\.com|linkedin\.com' \
             $(cat pages.txt)
