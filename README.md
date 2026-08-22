@@ -56,14 +56,14 @@ flowchart LR
   pr["pull request"] -- "CI build" --> preview["R2: preview/pr-&lt;n&gt;/<br/>deleted on close"]
   main["push to main"] -- "CI build" --> site["R2: site/&lt;sha&gt;/ (immutable)<br/>+ site/latest pointer"]
   snapshot["R2: _ci/site-data.tar.zst<br/>data snapshot"] -. "pulled by CI<br/>instead of refetching sources" .-> pr & main
-  worker["Cloudflare Worker<br/>(private infra repo)"] --> preview & site
+  worker["Cloudflare Worker<br/>(bioc-edge)"] --> preview & site
   worker --> legacy["mirrored legacy content<br/>(everything not yet ported)"]
   visitor(("visitor")) --> worker
 ```
 
 The split is deliberate: **this repo publishes builds; the Worker decides what
 is served.** Write access here never implies the power to change production —
-that lives with the route table in the private infra repo, where deploy is a
+that lives with the route table in [bioc-edge](https://github.com/seandavi/bioc-edge), where deploy is a
 pointer move and rollback is moving it back.
 
 Concretely (`.github/workflows/site.yml`):
@@ -119,7 +119,7 @@ pipeline-free curl setup for the parity pages.
 | repo | role |
 |---|---|
 | this one | renderer + pipeline; publishes builds |
-| private infra repo | Cloudflare Worker, R2 storage, legacy-content sync, route table — decides what production serves |
+| [bioc-edge](https://github.com/seandavi/bioc-edge) | Cloudflare Worker, R2 storage, legacy-content sync, route table — decides what production serves |
 | bioc-registry data plane | observes r-universe builds, evaluates the propagation gate, publishes the artifacts `/next/` renders |
 | [Bioconductor/bioconductor.org](https://github.com/Bioconductor/bioconductor.org) | the legacy nanoc site; still the home of prose content until the markdown import lands here |
 
@@ -142,6 +142,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). This project follows the
 
 ---
 
-This repo was extracted (fresh history, 2026-08) from the private
+This repo was extracted (fresh history, 2026-08) from the
 bioconductor.org-migration repo; serving infrastructure, sync tooling, and
-migration runbooks remain there.
+migration runbooks live in [bioc-edge](https://github.com/seandavi/bioc-edge),
+now public.
