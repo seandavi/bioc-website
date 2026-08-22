@@ -1,0 +1,82 @@
+# Daily link-rot check over a sample of the built site. (#18)
+#
+# Pages come from a fresh build, but links are resolved against the served
+# dev host (--base-url): the Worker serves more than dist -- the R2 mirror --
+# so mirror-backed internal links resolve for real, and external links get
+# checked from live HTML. External links rot independently of commits, hence
+# a schedule rather than a PR check. The badge is the alert.
+name: links
+
+on:
+  schedule:
+    - cron: "31 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+  AWS_DEFAULT_REGION: auto
+  AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+  AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+  AWS_MAX_ATTEMPTS: "10"
+  AWS_RETRY_MODE: adaptive
+  EP: --endpoint-url ${{ secrets.R2_ENDPOINT }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: astro/package-lock.json
+
+      - name: Install
+        run: npm ci
+        working-directory: astro
+
+      - name: Pull data snapshot
+        run: aws s3 cp $EP s3://bioc-site/_ci/site-data.tar.zst - | zstd -d | tar -x -C astro
+
+      - name: Build
+        run: npm run build
+        working-directory: astro
+
+      # Known-good links re-checked only after the cache expires, so one
+      # flaky remote doesn't flip the badge every morning.
+      - uses: actions/cache@v4
+        with:
+          path: astro/.lycheecache
+          key: lychee-${{ github.run_id }}
+          restore-keys: lychee-
+
+      - name: Check links on a daily sample
+        working-directory: astro
+        # Fixed core pages + a date-seeded random sample (deterministic within
+        # the day, so a failure reproduces on re-run; the sampled list is in
+        # the log). Excluded: the known-broken package-detail link classes
+        # (#19, #20) and social hosts that always block bots. 429 accepted --
+        # rate-limited is not broken.
+        run: |
+          curl -fsSL https://github.com/lycheeverse/lychee/releases/download/lychee-v0.24.2/lychee-x86_64-unknown-linux-gnu.tar.gz |
+            tar xz --strip-components=1 lychee-x86_64-unknown-linux-gnu/lychee
+          { printf '%s\n' dist/index.html dist/install/index.html \
+              dist/about/index.html dist/help/index.html \
+              dist/developers/index.html dist/next.html
+            find dist -name '*.html' | shuf -n 150 --random-source=<(yes "$(date +%F)")
+          } | sort -u | tee pages.txt
+          ./lychee --no-progress --base-url https://bioc-dev.cancerdatasci.org/ \
+            --root-dir "$PWD/dist" \
+            --cache --max-cache-age 14d \
+            --max-concurrency 8 --timeout 20 \
+            --accept '100..=103,200..=299,429' \
+            --user-agent 'bioc-website-linkcheck/0.1 (+https://github.com/seandavi/bioc-website)' \
+            --exclude 'packages/[0-9.]+/(bioc|data|workflows)/html/' \
+            --exclude 'twitter\.com|x\.com|linkedin\.com' \
+            $(cat pages.txt)

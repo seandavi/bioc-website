@@ -1,0 +1,10 @@
+{
+  "defaults": {
+    "standard": "WCAG2AA",
+    "timeout": 30000,
+    "chromeLaunchConfig": {
+      "executablePath": "/usr/bin/google-chrome",
+      "args": ["--no-sandbox"]
+    }
+  }
+}
