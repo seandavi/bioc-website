@@ -86,8 +86,8 @@ jobs:
             | grep -vE '/developers/how-to/(git-mirrors|long-tests)/' \
             | sed 's|^dist|https://bioc-dev.cancerdatasci.org|' | sort -u | tee pages.txt
           ./lychee --no-progress \
-            --cache --max-cache-age 14d \
-            --max-concurrency 8 --timeout 20 \
+            --cache --max-cache-age 14d --cache-exclude-status '400..=599' \
+            --max-concurrency 8 --timeout 45 --retry-wait-time 2 \
             --accept '100..=103,200..=299,403,429' \
             --user-agent 'bioc-website-linkcheck/0.1 (+https://github.com/seandavi/bioc-website)' \
             --exclude 'packages/[0-9.]+/(bioc|data/annotation|data/experiment|workflows)/html/' \
