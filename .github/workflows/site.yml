@@ -118,12 +118,14 @@ jobs:
             "dist/packages/$REL/BiocViews.html" "dist/packages/$REL/bioc/html/$PKG"
 
       - name: Accessibility on template pages
-        if: github.event_name == 'pull_request'
         # Non-blocking while the baseline is dirty (every template page has
         # WCAG2AA findings today). Flip to blocking once the baseline is clean.
+        # Green means "ran", not "clean": findings land in the step summary
+        # and the a11y-report artifact.
         continue-on-error: true
         working-directory: astro
         run: |
+          set -o pipefail
           python3 -m http.server 8080 -d dist &
           REL=$(ls dist/packages | grep -E '^[0-9]+\.[0-9]+$' | sort -V | tail -1)
           PKG=$(ls "dist/packages/$REL/bioc/html" | head -1)
@@ -131,4 +133,24 @@ jobs:
             http://localhost:8080/ http://localhost:8080/install/ \
             http://localhost:8080/help/ http://localhost:8080/next.html \
             "http://localhost:8080/packages/$REL/BiocViews.html" \
-            "http://localhost:8080/packages/$REL/bioc/html/$PKG"
+            "http://localhost:8080/packages/$REL/bioc/html/$PKG" 2>&1 |
+            tee a11y-report.txt
+
+      - name: Accessibility findings into the run summary
+        if: always()
+        working-directory: astro
+        run: |
+          [ -f a11y-report.txt ] || exit 0
+          { echo '## Accessibility (pa11y-ci, non-blocking)'
+            echo "$(grep -c '^ •' a11y-report.txt || true) findings across the template pages; full detail in the a11y-report artifact."
+            echo '```'
+            grep -E '^Errors in|URLs passed' a11y-report.txt || tail -3 a11y-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: a11y-report
+          path: astro/a11y-report.txt
+          if-no-files-found: ignore
