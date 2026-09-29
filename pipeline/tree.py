@@ -61,7 +61,7 @@ def vocab_ref(version):
 
 def load_vocab(url):
     """Parse the DOT digraph into {parent: [children]}, preserving file order."""
-    req = urllib.request.Request(url, headers={"User-Agent": "bioc-cloudflare"})
+    req = urllib.request.Request(url, headers={"User-Agent": "bioc-website/pipeline"})
     with urllib.request.urlopen(req, timeout=120) as r:
         text = r.read().decode("utf-8", "replace")
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)  # strip block comments
