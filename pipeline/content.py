@@ -123,6 +123,30 @@ def load_partial(repo, ref):
     return None
 
 
+# Blocks where blank lines are content, not layout.
+VERBATIM = re.compile(r"(<(pre|textarea)\b.*?</\2>)", re.S | re.I)
+
+
+def compact_html(html):
+    """Drop blank lines from an expanded partial, except inside <pre>/<textarea>.
+
+    nanoc renders Markdown with kramdown, which reads an HTML block through to
+    its closing tag. marked follows CommonMark, where a blank line ends an HTML
+    block: the rest of the partial is then parsed as Markdown, and its lines
+    indented 4+ spaces become code blocks (issue #47, /about/). Blank lines
+    between tags are insignificant in HTML, so removing them keeps the partial
+    one HTML block under either parser. Recorded in UPSTREAM.md for backport.
+    """
+    parts = VERBATIM.split(html)
+    # split() with two groups yields [text, block, tagname, text, block, tagname, ...]
+    out = []
+    for i in range(0, len(parts), 3):
+        out.append(re.sub(r"\n[ \t]*(?=\n)", "", parts[i]))
+        if i + 1 < len(parts):
+            out.append(parts[i + 1])
+    return "".join(out)
+
+
 def resolve_erb(body, repo, cfg, depth=0):
     """Expand the ERB we can evaluate; leave the rest alone.
 
@@ -151,7 +175,9 @@ def resolve_erb(body, repo, cfg, depth=0):
 
     def sub_render(m):
         part = load_partial(repo, m.group(1))
-        return resolve_erb(part, repo, cfg, depth + 1) if part is not None else m.group(0)
+        if part is None:
+            return m.group(0)
+        return compact_html(resolve_erb(part, repo, cfg, depth + 1))
 
     def sub_ami(m):
         ami = m.group("literal") or (cfg.get("ami_ids") or {}).get(m.group("key") or "")
