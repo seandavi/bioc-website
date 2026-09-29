@@ -38,7 +38,7 @@ import argparse, collections, json, os, re, sys, urllib.request
 
 from . import net, tarballs
 
-UA = {"User-Agent": "Mozilla/5.0 bioc-cloudflare/packages-json-generator"}
+UA = {"User-Agent": "Mozilla/5.0 bioc-website/packages-json-generator"}
 SITE = "https://bioconductor.org"
 REPOS = ["bioc", "data/annotation", "data/experiment", "workflows"]
 

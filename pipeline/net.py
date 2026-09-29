@@ -13,13 +13,13 @@ import time
 import urllib.error
 import urllib.request
 
-UA = {"User-Agent": "bioc-cloudflare/pipeline (+https://github.com/seandavi/bioc-cloudflare)"}
+UA = {"User-Agent": "bioc-website/pipeline (+https://github.com/seandavi/bioc-website)"}
 
 # Default origin for artifacts that only exist in a package repository (tarballs,
-# PACKAGES). Points at our own R2 mirror rather than bioconductor.org: the whole
-# point of this pipeline is to stop depending on the host being retired, and the
-# tarball is the maintainer's own artifact regardless of which CDN hands it over.
-MIRROR = "https://bioc-dev.cancerdatasci.org"
+# PACKAGES, config.yaml). Since the cutover on 2026-09-28 bioconductor.org itself
+# is served from our R2 mirror, so it is the canonical host; the legacy servers
+# stay reachable at master.bioconductor.org until they are retired.
+MIRROR = "https://bioconductor.org"
 
 
 class FetchError(Exception):
