@@ -49,6 +49,8 @@ jobs:
         run: npm ci
         working-directory: astro
 
+      - name: Pipeline tests
+        run: python3 -m unittest discover -s pipeline -p 'test_*.py' -t .
       - name: Pull data snapshot
         run: aws s3 cp $EP s3://bioc-site/_ci/site-data.tar.zst - | zstd -d | tar -x -C astro
 

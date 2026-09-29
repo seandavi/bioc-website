@@ -36,7 +36,7 @@ Usage:
 
 import argparse, collections, json, os, re, sys, urllib.request
 
-from . import tarballs
+from . import net, tarballs
 
 UA = {"User-Agent": "Mozilla/5.0 bioc-cloudflare/packages-json-generator"}
 SITE = "https://bioconductor.org"
@@ -162,6 +162,75 @@ def from_views(version, repo, branch):
     return out
 
 
+def repo_config(mirror=net.MIRROR):
+    """The repository's own config.yaml: what BiocManager reads to map a
+    Bioconductor version to its R version and to release/devel."""
+    import yaml
+    return yaml.safe_load(net.fetch(f"{mirror}/config.yaml")) or {}
+
+
+def bin_dirs(rver):
+    """packages.json field -> (binary directory, extension) for one R version.
+
+    CRAN renamed the macOS arm64 directory at R 4.6 (big-sur-arm64 ->
+    sonoma-arm64) and Bioconductor followed; Intel stayed put."""
+    # ponytail: the renderer reads only the sonoma-arm64 field; releases on R < 4.6
+    # are archival and never rebuilt, so their big-sur-arm64 field goes unread.
+    arm = "sonoma-arm64" if tuple(int(x) for x in rver.split(".")) >= (4, 6) else "big-sur-arm64"
+    return {
+        "win.binary.ver": (f"bin/windows/contrib/{rver}", "zip"),
+        f"mac.binary.{arm}.ver": (f"bin/macosx/{arm}/contrib/{rver}", "tgz"),
+        "mac.binary.big-sur-x86_64.ver": (f"bin/macosx/{MAC_X86}/contrib/{rver}", "tgz"),
+    }
+
+
+MAC_X86 = "big-sur-x86_64"
+
+
+def repo_index(repo, bioc, rver, mirror=net.MIRROR):
+    """{field: {package: version}} from the repository's own PACKAGES indexes,
+    source and binary. A missing binary index (data repositories have none) is
+    an empty map, not an error."""
+    base = f"{mirror}/packages/{bioc}/{repo}"
+    idx = {"source.ver": {n: r["Version"] for n, r in parse_dcf(
+        fetch(f"{base}/src/contrib/PACKAGES")).items() if r.get("Version")}}
+    for field, (d, _) in bin_dirs(rver).items():
+        txt = fetch(f"{base}/{d}/PACKAGES", optional=True)
+        idx[field] = {n: r["Version"] for n, r in parse_dcf(txt).items() if r.get("Version")} if txt else {}
+    return idx
+
+
+def apply_downloads(pkgs, idx, rver):
+    """Point every download link at a file the repository actually serves.
+
+    Download links and the displayed Version come from the repository's PACKAGES
+    indexes, never from the metadata origin: r-universe's latest successful build
+    is not necessarily what Bioconductor propagated (43 release packages differed
+    on 2026-09-29), and a link built from it is a 404. A binary is linked at its
+    own version, which may trail the source (the build system keeps the last
+    binary that built). Returns {package: metadata-origin version} for packages
+    whose version was corrected, and the packages the repository doesn't serve."""
+    corrected, unserved = {}, []
+    dirs = bin_dirs(rver)
+    for name, rec in pkgs.items():
+        src = idx["source.ver"].get(name)
+        if src is None:
+            rec.pop("source.ver", None)
+            unserved.append(name)
+        else:
+            if rec.get("Version") and rec["Version"] != src:
+                corrected[name] = rec["Version"]
+            rec["Version"] = src
+            rec["source.ver"] = f"src/contrib/{name}_{src}.tar.gz"
+        for field, (d, ext) in dirs.items():
+            v = idx[field].get(name)
+            if v:
+                rec[field] = f"{d}/{name}_{v}.{ext}"
+            else:
+                rec.pop(field, None)
+    return corrected, sorted(unserved)
+
+
 def load_ranks(repo, version):
     """Rank is not package metadata and not site output — it comes from
     bio-web-stats, a separate Flask/Postgres service fed by a daily Athena job
@@ -200,7 +269,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--bioc", default="3.23")
     ap.add_argument("--out", default="./out")
-    ap.add_argument("--universe", default="bioc-release")
+    ap.add_argument("--universe", default=None,
+                    help="r-universe to read software metadata from; default: "
+                         "'bioc' for the devel version in config.yaml, else 'bioc-release'")
     ap.add_argument("--software-origin", choices=["runiverse", "views"], default="runiverse")
     ap.add_argument("--data-origin", choices=["tarballs", "views"], default="tarballs",
                     help="origin for annotation/experiment/workflows metadata. "
@@ -209,6 +280,12 @@ def main(argv=None):
                          "exists only for comparison.")
     args = ap.parse_args(argv)
 
+    cfg = repo_config()
+    if args.universe is None:
+        args.universe = "bioc" if str(cfg.get("devel_version")) == args.bioc else "bioc-release"
+    rver = str((cfg.get("r_ver_for_bioc_ver") or {}).get(args.bioc) or "")
+    if not rver:
+        sys.exit(f"config.yaml has no r_ver_for_bioc_ver for {args.bioc}")
     branch = "devel" if args.universe == "bioc" else "RELEASE_" + args.bioc.replace(".", "_")
     provenance, repos, tarball_reports = {}, {}, []
 
@@ -272,6 +349,13 @@ def main(argv=None):
             n += 1
         print(f"folded {n} CRAN packages into the reverse-dependency graph", file=sys.stderr)
 
+    downloads = {}
+    for repo, pkgs in repos.items():
+        corrected, unserved = apply_downloads(pkgs, repo_index(repo, args.bioc, rver), rver)
+        downloads[repo] = {"version_corrected_from_origin": corrected, "not_in_repository": unserved}
+        print(f"[{repo}] downloads from the repository's PACKAGES: {len(corrected)} versions "
+              f"corrected, {len(unserved)} not in the repository", file=sys.stderr)
+
     total = 0
     for repo, pkgs in repos.items():
         ranks = load_ranks(repo, args.bioc)
@@ -307,7 +391,7 @@ def main(argv=None):
     # Provenance is written next to the data, not just printed. A build that
     # silently fell back to a circular source must be detectable afterwards.
     meta = {"bioc_version": args.bioc, "branch": branch, "origins": provenance,
-            "tarball_reports": tarball_reports}
+            "tarball_reports": tarball_reports, "r_version": rver, "downloads": downloads}
     with open(os.path.join(args.out, args.bioc, "provenance.json"), "w") as fh:
         json.dump(meta, fh, indent=1)
 

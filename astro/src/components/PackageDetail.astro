@@ -27,6 +27,15 @@ const revFields = [
 const vignettes = asArray(pkg.vignettes);
 const vignetteTitles = asArray(pkg.vignetteTitles);
 const hasDeps = depFields.some(([, l]) => asArray(l).length > 0);
+// Same rows and labels as the legacy page's Package Archives table. Each path
+// names a file in the repository's own PACKAGES index (pipeline/packages.py
+// apply_downloads), so the link text is the real filename, version included.
+const downloads = [
+  ['Source package', pkg['source.ver']],
+  ['Windows binary (x86_64)', pkg['win.binary.ver']],
+  ['macOS binary (arm64)', pkg['mac.binary.sonoma-arm64.ver']],
+  ['macOS binary (x86_64)', pkg['mac.binary.big-sur-x86_64.ver']],
+].filter(([, path]) => path);
 const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
 
 const repoLabels = {
@@ -97,18 +106,12 @@ BiocManager::install("${name}")`}</code></pre>
 {pkg['source.ver'] && (
   <>
     <h2>Download</h2>
-    <ul class="downloads">
-      <li><a href={`/packages/${version}/${repo}/${pkg['source.ver']}`}>Source package</a></li>
-      {pkg['win.binary.ver'] && (
-        <li><a href={`/packages/${version}/${repo}/${pkg['win.binary.ver']}`}>Windows binary</a></li>
-      )}
-      {pkg['mac.binary.sonoma-arm64.ver'] && (
-        <li><a href={`/packages/${version}/${repo}/${pkg['mac.binary.sonoma-arm64.ver']}`}>macOS arm64 binary</a></li>
-      )}
-      {pkg['mac.binary.big-sur-x86_64.ver'] && (
-        <li><a href={`/packages/${version}/${repo}/${pkg['mac.binary.big-sur-x86_64.ver']}`}>macOS x86_64 binary</a></li>
-      )}
-    </ul>
+    <p>Follow the <a href="/install/#install-bioconductor-packages">installation instructions</a> to use this package in your R session.</p>
+    <table class="downloads">
+      {downloads.map(([label, path]) => (
+        <tr><td>{label}</td><td><a href={`/packages/${version}/${repo}/${path}`}>{path.split('/').pop()}</a></td></tr>
+      ))}
+    </table>
   </>
 )}
 
