@@ -37,10 +37,12 @@ const citationUrl = repo === 'data/annotation'
 )}
 
 <script>
+  import { sanitizeCitation } from '../lib/citation.js';
+
   const box = document.getElementById('citation-text');
   if (box?.dataset.citationUrl) {
     try {
-      const response = await fetch(box.dataset.citationUrl);
+      const response = await fetch(box.dataset.citationUrl, { signal: AbortSignal.timeout(8000) });
       if (response.ok && new URL(response.url).origin === location.origin
           && /html/.test(response.headers.get('content-type') ?? '')) {
         // Same clean-ups as the legacy loader (R emits stray braces and an
@@ -48,8 +50,8 @@ const citationUrl = repo === 'data/annotation'
         const html = (await response.text())
           .replace(/}. /g, '').replace(/}.</g, '<').replace(/}."/g, '"').replace(' (????)', '');
         const { body } = new DOMParser().parseFromString(html, 'text/html');
-        body.querySelectorAll('script').forEach((s) => s.remove());
-        if (body.textContent.trim()) box.replaceChildren(...body.childNodes);
+        sanitizeCitation(body);
+        if (html.length < 50000 && body.textContent.trim()) box.replaceChildren(...body.childNodes);
       }
     } catch {
       // Keep the generated fallback.
