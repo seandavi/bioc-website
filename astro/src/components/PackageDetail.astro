@@ -6,7 +6,6 @@
  * for the collapsible sections, and a details table for the metadata.
  */
 import { depName, asArray } from '../lib/packages.js';
-import PackageCitation from './PackageCitation.astro';
 
 // `indexed` marks this page for the build-time Pagefind index (release pages
 // only: indexing devel too would put near-duplicates in every result list).
@@ -48,6 +47,8 @@ const downloads = [
   ['macOS binary (x86_64)', pkg['mac.binary.big-sur-x86_64.ver']],
 ].filter(([, path]) => path);
 const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
+
+import PackageCitation from './PackageCitation.astro';
 
 // Same DOI on every page kind: it is minted per package name and always
 // redirects to the current release (devel if the package isn't released yet).

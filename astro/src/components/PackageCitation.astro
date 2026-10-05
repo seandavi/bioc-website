@@ -13,7 +13,7 @@
  * has a citation page (checked 2026-10-05, 3.23 and 3.24), the rest 404.
  * Failed builds have no Title or Version, so there is nothing to cite.
  */
-import { citationAuthors } from '../lib/packages.js';
+import { citationAuthors } from '../lib/citation.js';
 
 const { pkg, name, version, repo, doi } = Astro.props;
 const authors = citationAuthors(pkg.Author);
