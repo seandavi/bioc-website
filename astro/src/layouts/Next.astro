@@ -5,6 +5,8 @@
  * fonts, no jQuery, no legacy CSS cascade, dark-mode aware. Content is static;
  * reactivity is layered over it per-page (ADR 0008 / #79).
  */
+import { canonicalUrl } from '../lib/canonical.js';
+
 const { title, description } = Astro.props;
 ---
 <!DOCTYPE html>
@@ -14,6 +16,7 @@ const { title, description } = Astro.props;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content={description ?? 'Bioconductor next-gen preview'} />
     <title>{title ? `${title} · Bioconductor next` : 'Bioconductor next'}</title>
+    <link rel="canonical" href={canonicalUrl(Astro.url.pathname)} />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   </head>
   <body>

@@ -58,6 +58,10 @@ jobs:
         run: npm run build
         working-directory: astro
 
+      - name: Canonical links
+        run: node check-canonical.mjs
+        working-directory: astro
+
       - name: Publish preview
         if: github.event_name == 'pull_request'
         # Second pass only re-touches what the first left behind: sync is

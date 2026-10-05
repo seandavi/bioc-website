@@ -38,7 +38,7 @@ export async function getStaticPaths() {
           params: { slug: `${version}/${repo}/html/${name}` },
           // Pagefind indexes the release's pages only: devel near-duplicates
           // would shadow every result, and archival releases are frozen.
-          props: { kind: 'detail', pkg, name, version, repo, indexed: version === release },
+          props: { kind: 'detail', channel: channelOf(version), pkg, name, version, repo, indexed: version === release },
         });
       }
       // build.format is 'file', so the '<...>/index' slug emits
@@ -46,7 +46,7 @@ export async function getStaticPaths() {
       // trailing-slash URL to (worker/src/keys.ts candidates()).
       paths.push({
         params: { slug: `${version}/${repo}/index` },
-        props: { kind: 'index', version, repo, label: repoLabel(repo), packages: pkgs },
+        props: { kind: 'index', channel: channelOf(version), version, repo, label: repoLabel(repo), packages: pkgs },
       });
     }
     const tree = loadTree(version);
@@ -68,13 +68,19 @@ export async function getStaticPaths() {
 }
 
 const props = Astro.props;
+// The live release and devel versions are the same pages as /packages/release/
+// and /packages/devel/, which are the URLs to index; archival releases are
+// distinct frozen content and stay self-canonical.
+const canonical = props.channel
+  ? Astro.url.pathname.replace(`/packages/${props.version}/`, `/packages/${props.channel}/`)
+  : undefined;
 const titles = {
   detail: () => props.name,
   index: () => `${props.version} ${props.label} Packages`,
   biocviews: () => `${props.version} Package Categories`,
 };
 ---
-<Site title={titles[props.kind]()} description={props.kind === 'detail' ? props.pkg.Title : undefined}>
+<Site title={titles[props.kind]()} description={props.kind === 'detail' ? props.pkg.Title : undefined} canonical={canonical}>
   {props.kind === 'detail' && (
     <PackageDetail pkg={props.pkg} name={props.name} version={props.version} repo={props.repo} indexed={props.indexed} />
   )}
