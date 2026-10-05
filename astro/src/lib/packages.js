@@ -100,6 +100,20 @@ export function loadTree(version) {
   return JSON.parse(readFileSync(f, 'utf8'));
 }
 
+// "BioC 2.14 (R-3.1) (12 years)" from a record's `since` field (pipeline/since.py).
+// Whole years since the release date, counted at build time; a release with no
+// date (devel) gets none.
+export function sinceLabel({ release, r, date, orEarlier }, now = new Date()) {
+  let label = `BioC ${release}${orEarlier ? ' or earlier' : ''} (R-${r})`;
+  if (date) {
+    const d = new Date(date);
+    let years = now.getUTCFullYear() - d.getUTCFullYear();
+    if (now.getUTCMonth() < d.getUTCMonth() || (now.getUTCMonth() === d.getUTCMonth() && now.getUTCDate() < d.getUTCDate())) years--;
+    label += years < 1 ? ' (less than a year)' : ` (${years} ${years === 1 ? 'year' : 'years'})`;
+  }
+  return label;
+}
+
 // This package in every release that ships it, as [{ version, repo, channel }]
 // newest first, so a package page can link to its siblings and every link
 // resolves. `channel` is 'devel' for the newest release on disk and 'release'
