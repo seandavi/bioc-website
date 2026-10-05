@@ -17,6 +17,7 @@
 import { marked } from 'marked';
 import Site from '../layouts/Site.astro';
 import Events from '../components/Events.astro';
+import CopyButtons from '../components/CopyButtons.astro';
 import { loadPages, loadEvents, topEvents } from '../lib/content.js';
 
 export async function getStaticPaths() {
@@ -62,4 +63,5 @@ const events = parts.length > 1 ? topEvents(loadEvents()) : [];
       </>
     ))}
   </div>
+  {page.url === '/install/' && <CopyButtons />}
 </Site>

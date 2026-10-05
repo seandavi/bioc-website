@@ -5,3 +5,10 @@ data/
 
 # Copied verbatim from the upstream repo by `just data-assets` (32 MB).
 public/
+
+# The patterns above only match directories. Contributors and agents often
+# symlink these three to a shared checkout, and a symlink is not a directory:
+# without these lines `git add -A` commits it (it happened: #42).
+/node_modules
+/data
+/public

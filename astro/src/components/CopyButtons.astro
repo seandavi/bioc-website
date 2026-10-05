@@ -1,0 +1,62 @@
+---
+/**
+ * Copy-to-clipboard buttons on code blocks. Included by the pages that have
+ * blocks worth copying (package pages, /install). The buttons are added by
+ * this script, so without JS -- or where navigator.clipboard is missing, e.g.
+ * plain http -- the page is unchanged. Astro bundles the script; nothing here
+ * goes in public/.
+ */
+---
+<script>
+  if (navigator.clipboard) {
+    // One polite live region shared by every button: text changing inside a
+    // button is not reliably announced.
+    const status = document.createElement('span');
+    status.className = 'sr-only';
+    status.setAttribute('role', 'status');
+    document.body.append(status);
+
+    for (const pre of document.querySelectorAll('pre:has(code)')) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'copy-button';
+      button.textContent = 'Copy';
+      button.setAttribute('aria-label', 'Copy code to clipboard');
+      let reset;
+      button.addEventListener('click', async () => {
+        let result = 'Copied';
+        try {
+          await navigator.clipboard.writeText(pre.querySelector('code').textContent.trim());
+        } catch {
+          result = 'Copy failed';
+        }
+        button.textContent = result;
+        status.textContent = result === 'Copied' ? 'Copied to clipboard' : result;
+        clearTimeout(reset);
+        reset = setTimeout(() => {
+          button.textContent = 'Copy';
+          status.textContent = '';
+        }, 2000);
+      });
+      pre.append(button);
+    }
+  }
+</script>
+
+<style is:global>
+  pre:has(.copy-button) { position: relative; }
+  .copy-button {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.6rem;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.85rem;
+    border: 1px solid #fff;
+    border-radius: 4px;
+    background: #fff;
+    color: #1a627c;
+    cursor: pointer;
+  }
+  /* White button on white code: the border keeps it visible. */
+  pre:has(code.light) .copy-button { border-color: #1a627c; }
+</style>

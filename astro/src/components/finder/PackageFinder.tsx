@@ -269,10 +269,11 @@ export default function PackageFinder({ version, channel, other, roots, pkgs }: 
             )}
           </h2>
           <table>
+            <caption className="sr-only">Package names and titles</caption>
             <thead>
               <tr>
-                <th>Package</th>
-                <th>Title</th>
+                <th scope="col">Package</th>
+                <th scope="col">Title</th>
               </tr>
             </thead>
             <tbody>
