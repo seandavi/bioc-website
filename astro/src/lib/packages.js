@@ -43,6 +43,37 @@ export function depName(entry) {
   return String(entry).split(/[ (]/)[0];
 }
 
+// The packages shipped with R itself (plus "R" in Depends): no page anywhere.
+const BASE_R = new Set([
+  'R', 'base', 'compiler', 'datasets', 'graphics', 'grDevices', 'grid', 'methods',
+  'parallel', 'splines', 'stats', 'stats4', 'tcltk', 'tools', 'utils',
+]);
+
+// version -> Map(package name -> repo) over every repo of that release, so a
+// dependency can be told apart as Bioconductor (and which repo) or not.
+const biocRepos = new Map();
+function biocRepoOf(version, name) {
+  if (!biocRepos.has(version)) {
+    const m = new Map();
+    for (const repo of reposFor(version)) {
+      for (const n of Object.keys(loadRepo(version, repo))) m.set(n, repo);
+    }
+    biocRepos.set(version, m);
+  }
+  return biocRepos.get(version).get(name);
+}
+
+// Where a dependency entry points: its Bioconductor page in this release,
+// CRAN for anything else (reverse dependencies include CRAN packages, which
+// pipeline/packages.py folds into the reverse graph), or null for base R.
+export function depHref(version, entry) {
+  const name = depName(entry);
+  if (BASE_R.has(name)) return null;
+  const repo = biocRepoOf(version, name);
+  if (repo) return `/packages/${version}/${repo}/html/${name}.html`;
+  return `https://cran.r-project.org/package=${name}`;
+}
+
 export function asArray(v) {
   if (v == null) return [];
   return Array.isArray(v) ? v : [v];
@@ -67,4 +98,42 @@ export function loadTree(version) {
   const f = join(DATA, version, 'tree.json');
   if (!existsSync(f)) return null;
   return JSON.parse(readFileSync(f, 'utf8'));
+}
+
+// This package in every release that ships it, as [{ version, repo, channel }]
+// newest first, so a package page can link to its siblings and every link
+// resolves. `channel` is 'devel' for the newest release on disk and 'release'
+// for its predecessor (as in pages/packages/[...slug].astro).
+//
+// The list comes from the record's `releases` field ([[version, repo], ...],
+// written by the pipeline, which sees every release). CI builds from a snapshot
+// holding only the two live releases, so walking the disk there would never
+// reach the old versions. The walk remains as the fallback for a record without
+// the field (a stale snapshot) and for malformed values.
+let releasesOf;
+export function releasesOfPackage(name, pkg) {
+  const live = versions().reverse();
+  const channelOf = (v) => (v === live[0] ? 'devel' : v === live[1] ? 'release' : null);
+  let list = (Array.isArray(pkg?.releases) ? pkg.releases : [])
+    .filter((e) => Array.isArray(e) && /^\d+\.\d+$/.test(e[0]) && typeof e[1] === 'string')
+    .map(([version, repo]) => ({ version, repo }));
+  if (list.length === 0) {
+    if (!releasesOf) {
+      releasesOf = new Map();
+      for (const version of live) {
+        for (const repo of reposFor(version)) {
+          for (const n of Object.keys(loadRepo(version, repo))) {
+            if (!releasesOf.has(n)) releasesOf.set(n, []);
+            releasesOf.get(n).push({ version, repo });
+          }
+        }
+      }
+    }
+    list = releasesOf.get(name) ?? [];
+  }
+  // One entry per version: a name in two repos of one release lists it once.
+  const seen = new Set();
+  return list
+    .filter((r) => !seen.has(r.version) && seen.add(r.version))
+    .map((r) => ({ ...r, channel: channelOf(r.version) }));
 }

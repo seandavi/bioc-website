@@ -19,6 +19,7 @@
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import { canonicalUrl } from '../lib/canonical.js';
+import '../styles/site-overrides.css';
 
 // `canonical` is a path; it defaults to the page's own.
 const { title, description, fullwidth = false, bodyClass, canonical = Astro.url.pathname } = Astro.props;
