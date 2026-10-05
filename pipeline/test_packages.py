@@ -48,10 +48,6 @@ class ApplyDownloads(unittest.TestCase):
         self.assertIn("mac.binary.big-sur-arm64.ver", bin_dirs("4.5"))
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class RankByScore(unittest.TestCase):
     def test_most_downloaded_is_rank_one_and_ties_share_the_best_rank(self):
         scores = {"a": 50, "b": 90, "c": 50, "d": 10}
@@ -61,3 +57,7 @@ class RankByScore(unittest.TestCase):
     def test_unscored_package_ranks_last_and_removed_ones_take_no_place(self):
         scores = {"a": 5, "gone": 99}
         self.assertEqual(rank_by_score(scores, ["a", "new"]), {"a": 1, "new": 2})
+
+
+if __name__ == "__main__":
+    unittest.main()
