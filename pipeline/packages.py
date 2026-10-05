@@ -14,8 +14,9 @@ Origins, per repository:
   data/experiment              ) The maintainer's own file, passed through the
   workflows                    ) repository untouched. See pipeline/tarballs.py.
   reverse dependencies         computed across all four repos + CRAN PACKAGES
-  Rank                         bio-web-stats (separate service; served under
-                                             the site hostname but not site output)
+  DownloadRank                 bio-web-stats download scores (separate service;
+                                             served under the site hostname but not
+                                             site output), ranked within the repository
 
 `--data-origin views` restores the old circular fetch of VIEWS off
 bioconductor.org. It is kept only so the two can be compared; it cannot survive
@@ -231,14 +232,17 @@ def apply_downloads(pkgs, idx, rver):
     return corrected, sorted(unserved)
 
 
-def load_ranks(repo, version):
-    """Rank is not package metadata and not site output — it comes from
-    bio-web-stats, a separate Flask/Postgres service fed by a daily Athena job
+def load_scores(repo):
+    """Download scores are not package metadata and not site output — they come
+    from bio-web-stats, a separate Flask/Postgres service fed by a daily Athena job
     over CloudFront logs. Confirmed live: /packages/stats/* answers with
     `Server: waitress` while every other path answers `Server: Apache/2.4.52`,
     so this is already decoupled from master and is a genuine origin. It is
     only *addressed* through the shared hostname — which means the routing for
     this path is a must-preserve item during any cutover.
+
+    The file's second column is a score (distinct IPs over the last 12 months),
+    not a rank; see rank_by_score().
 
     Note the directory and filename slugs differ for the data repositories."""
     dirslug, fileslug = {
@@ -250,17 +254,30 @@ def load_ranks(repo, version):
     txt = fetch(f"{SITE}/packages/stats/{dirslug}/{fileslug}_pkg_scores.tab", optional=True)
     if not txt:
         return {}
-    ranks = {}
+    scores = {}
     for line in txt.splitlines():
         if line.startswith("Package\t"):
             continue
         parts = line.split("\t")
         if len(parts) >= 2:
             try:
-                ranks[parts[0].strip()] = int(parts[1])
+                scores[parts[0].strip()] = int(parts[1])
             except ValueError:
                 pass
-    return ranks
+    return scores
+
+
+def rank_by_score(scores, names):
+    """{package: rank} within `names`: 1 is the most downloaded.
+
+    Ties share the best rank of the group, and a package with no score ranks as
+    zero, as in the legacy scripts/badge_generation.rb getRanking(). Scores for
+    packages outside `names` (removed from the release) do not take a place."""
+    ordered = sorted((scores.get(n, 0) for n in names), reverse=True)
+    first = {}
+    for i, score in enumerate(ordered, 1):
+        first.setdefault(score, i)
+    return {n: first[scores.get(n, 0)] for n in names}
 
 
 # ------------------------------------------------------------------ build ---
@@ -358,13 +375,14 @@ def main(argv=None):
 
     total = 0
     for repo, pkgs in repos.items():
-        ranks = load_ranks(repo, args.bioc)
+        scores = load_scores(repo)
+        ranks = rank_by_score(scores, pkgs) if scores else {}
         for name, rec in pkgs.items():
             for field in REV.values():
                 if rev[name][field]:
                     rec[field] = sorted(rev[name][field], key=str.lower)
             if name in ranks:
-                rec["Rank"] = ranks[name]
+                rec["DownloadRank"] = ranks[name]
             # Repository root term -- see ROOT_TERM. Sorted so the order does not
             # depend on whether the package happened to declare it itself.
             root = ROOT_TERM.get(repo)
@@ -385,7 +403,7 @@ def main(argv=None):
     print("\nprovenance:", file=sys.stderr)
     for repo, src in provenance.items():
         print(f"  {repo:<18} {src}", file=sys.stderr)
-    print(f"  {'Rank':<18} bio-web-stats (separate service, genuine origin)", file=sys.stderr)
+    print(f"  {'DownloadRank':<18} bio-web-stats (separate service, genuine origin)", file=sys.stderr)
     print(f"  {'reverse deps':<18} computed across all four repos + CRAN", file=sys.stderr)
 
     # Provenance is written next to the data, not just printed. A build that
