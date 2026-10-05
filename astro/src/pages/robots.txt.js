@@ -3,11 +3,26 @@
 // mirror's copy, which blocks /packages/release/ and /packages/devel/.
 import { versions } from '../lib/packages.js';
 
-// Release numbers older than the package data (JSON starts at 2.5), plus every
-// numbered release the build knows. The live release and devel are listed too:
-// they are served at /packages/release|devel/ and their numbered URLs only
+// Every numbered release there has ever been, derived from the version numbers
+// and NOT from the data on disk: CI builds from a snapshot holding only the two
+// live releases, so listing "the releases the build knows" silently dropped
+// 2.5-3.22 (they are legacy mirror pages with no canonical, and must stay
+// blocked until seandavi/bioc-website#50). The live release and devel are listed
+// too: they are served at /packages/release|devel/ and their numbered URLs only
 // duplicate those (canonicals: #34).
-const before2_5 = ['1.8', '1.9', '2.0', '2.1', '2.2', '2.3', '2.4'];
+const FIRST_MAJOR_LAST_MINOR = { 1: 9, 2: 14 }; // 1.8-1.9, 2.0-2.14: frozen
+const newest = versions().at(-1);
+const [newestMajor, newestMinor] = newest.split('.').map(Number);
+if (newestMajor !== 3) {
+  // 3.x is the current major; when 4.0 appears this needs 3's last minor.
+  throw new Error(`robots.txt: newest release is ${newest}; add the last 3.x minor to FIRST_MAJOR_LAST_MINOR`);
+}
+const range = (n, from = 0) => Array.from({ length: n - from + 1 }, (_, i) => from + i);
+const numbered = [
+  ...range(FIRST_MAJOR_LAST_MINOR[1], 8).map((m) => `1.${m}`),
+  ...range(FIRST_MAJOR_LAST_MINOR[2]).map((m) => `2.${m}`),
+  ...range(newestMinor).map((m) => `3.${m}`),
+];
 
 const disallow = [
   '/checkResults/', '/packages/submitted/', '/packages/misc/', '/packages/lindsey/',
@@ -25,7 +40,7 @@ const disallow = [
   // Legacy aliases of the release/devel trees.
   '/packages/bioc/', '/packages/data/',
   // kept until seandavi/bioc-website#50 (canonical/noindex on these URLs, bioc-edge#55)
-  ...[...before2_5, ...versions()].map((v) => `/packages/${v}/`),
+  ...numbered.map((v) => `/packages/${v}/`),
 ];
 
 export const GET = () =>
