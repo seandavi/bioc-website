@@ -1,15 +1,31 @@
 """python3 -m unittest discover -s pipeline -p 'test_*.py'"""
 import json
 import unittest
-
 from unittest import mock
 
-from pipeline.packages import apply_downloads, bin_dirs, from_runiverse
+from pipeline import packages
+
+from pipeline.packages import apply_downloads, bin_dirs
 
 
 def index(src, win=None, arm=None, x86=None):
     return {"source.ver": src, "win.binary.ver": win or {},
             "mac.binary.sonoma-arm64.ver": arm or {}, "mac.binary.big-sur-x86_64.ver": x86 or {}}
+
+
+class FromRuniverse(unittest.TestCase):
+    def records(self, published):
+        # The bioc universe lists a data package (ALL) alongside software.
+        universe = json.dumps([{"Package": "limma", "Version": "3.68.5"},
+                               {"Package": "ALL", "Version": "1.54.0"}])
+        with mock.patch("pipeline.packages.fetch", return_value=universe):
+            return packages.from_runiverse("bioc", "devel", published)
+
+    def test_packages_the_software_repository_does_not_publish_are_dropped(self):
+        self.assertEqual(list(self.records({"limma": "3.68.5"})), ["limma"])
+
+    def test_nothing_is_added_for_published_names_missing_from_the_universe(self):
+        self.assertEqual(list(self.records({"limma": "3.68.5", "Ularcirc": "1.30.0"})), ["limma"])
 
 
 class ApplyDownloads(unittest.TestCase):
@@ -49,21 +65,6 @@ class ApplyDownloads(unittest.TestCase):
     def test_arm64_directory_follows_the_r_version(self):
         self.assertIn("mac.binary.sonoma-arm64.ver", bin_dirs("4.6"))
         self.assertIn("mac.binary.big-sur-arm64.ver", bin_dirs("4.5"))
-
-
-class FromRuniverse(unittest.TestCase):
-    def records(self, published):
-        # The bioc universe lists a data package (ALL) alongside software.
-        universe = json.dumps([{"Package": "limma", "Version": "3.68.5"},
-                               {"Package": "ALL", "Version": "1.54.0"}])
-        with mock.patch("pipeline.packages.fetch", return_value=universe):
-            return from_runiverse("bioc", "devel", published)
-
-    def test_packages_the_software_repository_does_not_publish_are_dropped(self):
-        self.assertEqual(list(self.records({"limma": "3.68.5"})), ["limma"])
-
-    def test_nothing_is_added_for_published_names_missing_from_the_universe(self):
-        self.assertEqual(list(self.records({"limma": "3.68.5", "Ularcirc": "1.30.0"})), ["limma"])
 
 
 if __name__ == "__main__":
