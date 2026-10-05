@@ -1,0 +1,50 @@
+/*
+ * Fixes to the vendored upstream stylesheets in /style/ (public/ is copied from
+ * the nanoc site and not tracked here). Loaded after them; each is a row in
+ * UPSTREAM.md.
+ */
+
+/* Upstream sets `a { color: black }`, so links in body text look like text.
+ * :where() keeps specificity at `a`, so buttons, cards and nav that set their
+ * own colour are untouched. --primary-p400 is 8.1:1 on white. */
+:where(.content) a {
+  color: var(--primary-p400);
+}
+
+/* `footer * { text-decoration: none }` strips the underline from footer links. */
+footer a {
+  text-decoration: underline;
+}
+
+/* The column headings are `<a><h3>…</h3></a>`; keep them plain. */
+footer a:has(> h3) {
+  text-decoration: none;
+}
+
+/* Mobile nav drawer (<= 1080px). Upstream's `.header-nav.active { height: 21rem }`
+ * plus `overflow: hidden` clips the search box and Get Started button. */
+@media (max-device-width: 1080px), (width <= 1080px) {
+  .header-nav.active {
+    height: auto;
+  }
+}
+
+/* `.content { overflow: hidden }` clips wide tables on narrow screens with no way to scroll.
+ * Narrow screens only: on desktop the homepage's `100vw` events strip would show a
+ * horizontal scrollbar under it. */
+@media (max-device-width: 768px), (width <= 768px) {
+  .content {
+    overflow-x: auto;
+  }
+}
+
+/* `.page-container * { font-size: 1rem }` flattens headings; restore the
+ * small-screen scale from base/typography.css. */
+@media (max-device-width: 768px), (width <= 768px) {
+  .page-container h1 { font-size: 2.1rem; }
+  .page-container h2 { font-size: 1.5rem; }
+  .page-container h3 { font-size: 1.4rem; }
+  .page-container h4 { font-size: 1.25rem; }
+  .page-container h5 { font-size: 1.125rem; }
+  .page-container h6 { font-size: 1.1rem; }
+}

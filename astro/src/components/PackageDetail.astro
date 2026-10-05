@@ -5,16 +5,14 @@
  * style/pages/packages.css applies: `<details>` + `summary.package-details`
  * for the collapsible sections, and a details table for the metadata.
  */
-import { depName, asArray } from '../lib/packages.js';
+import { depHref, asArray, sinceLabel } from '../lib/packages.js';
 
 // `indexed` marks this page for the build-time Pagefind index (release pages
 // only: indexing devel too would put near-duplicates in every result list).
-const { pkg, name, version, repo, indexed = false } = Astro.props;
+const { pkg, name, version, repo, repoSize, indexed = false } = Astro.props;
 
-// Cross-repo links are not resolved: a dependency named here may live in any of
-// the four repositories or on CRAN, and guessing wrong produces a confident 404.
-// Staying within version+repo matches the current site's behaviour.
-const linkDep = (d) => `/packages/${version}/${repo}/html/${depName(d)}.html`;
+// [name, href] per dependency entry; href is null for base R.
+const depLinks = (list) => asArray(list).map((d) => [d, depHref(version, d)]);
 
 const depFields = [
   ['Depends', pkg.Depends], ['Imports', pkg.Imports], ['LinkingTo', pkg.LinkingTo],
@@ -27,6 +25,16 @@ const revFields = [
 const vignettes = asArray(pkg.vignettes);
 const vignetteTitles = asArray(pkg.vignetteTitles);
 const hasDeps = depFields.some(([, l]) => asArray(l).length > 0);
+// Build reports exist for software, experiment data and workflows, not for
+// annotation packages (verified: /checkResults/<ver>/data-annotation-LATEST/<pkg>/
+// is a 404 for every package). r-universe builds the same three kinds, but only
+// the current release (bioc-release) and devel (bioc) universes exist; the newest
+// version present is devel and its predecessor the release, as in the slug page.
+import { versions } from '../lib/packages.js';
+const [devel, release] = versions().reverse();
+const universe = { [devel]: 'bioc', [release]: 'bioc-release' }[version];
+const hasBuildReport = repo !== 'data/annotation';
+const buildReport = `https://bioconductor.org/checkResults/${version}/${repo.replace('/', '-')}-LATEST/${name}/`;
 // Same rows and labels as the legacy page's Package Archives table. Each path
 // names a file in the repository's own PACKAGES index (pipeline/packages.py
 // apply_downloads), so the link text is the real filename, version included.
@@ -36,12 +44,22 @@ const downloads = [
   ['macOS binary (arm64)', pkg['mac.binary.sonoma-arm64.ver']],
   ['macOS binary (x86_64)', pkg['mac.binary.big-sur-x86_64.ver']],
 ].filter(([, path]) => path);
+import { releasesOfPackage } from '../lib/packages.js';
+// This package in every release that ships it. Plain links, so it works without JS.
+const releases = releasesOfPackage(name, pkg);
 const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
+
+import PackageCitation from './PackageCitation.astro';
+
+// Same DOI on every page kind: it is minted per package name and always
+// redirects to the current release (devel if the package isn't released yet).
+const doi = `10.18129/B9.bioc.${name}`;
 
 const repoLabels = {
   'bioc': 'Software', 'data/annotation': 'Annotation',
   'data/experiment': 'Experiment Data', 'workflows': 'Workflow',
 };
+import CopyButtons from './CopyButtons.astro';
 ---
 <ul class="breadcrumbs">
   <li><a href="/">Home</a></li>
@@ -61,9 +79,34 @@ const repoLabels = {
     Bioconductor version: {version} &middot; Package version: {pkg.Version}
   </p>
 
+  {releases.length > 1 && (
+    <details class="package-versions" data-pagefind-ignore>
+      <summary>Other Bioconductor versions</summary>
+      <p>devel is the development version; release is the current stable one.</p>
+      <p>
+        {releases.map((r, i) => {
+          const label = `${r.version}${r.channel ? ` (${r.channel})` : ''}`;
+          return (
+            <>
+              {i > 0 && ', '}
+              {r.version === version
+                ? <span class="current" aria-current="page">{label}</span>
+                : <a href={`/packages/${r.version}/${r.repo}/html/${name}.html`} aria-label={`Bioconductor ${label}`}>{label}</a>}
+            </>
+          );
+        })}
+      </p>
+    </details>
+  )}
+
   {pkg.Description && <p class="description">{pkg.Description}</p>}
+
+  <p class="doi" data-pagefind-ignore>
+    DOI: <a title="DOI for use in publications, etc., will always redirect to current release version (or devel if package is not in release yet)." href={`https://doi.org/${doi}`}>{doi}</a>
+  </p>
 </div>
 
+<CopyButtons />
 <h2>Installation</h2>
 <pre><code>{`if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
@@ -79,14 +122,29 @@ BiocManager::install("${name}")`}</code></pre>
     {pkg.URL && <tr><td>URL</td><td><a href={pkg.URL}>{pkg.URL}</a></td></tr>}
     {pkg.BugReports && <tr><td>Bug Reports</td><td><a href={pkg.BugReports}>{pkg.BugReports}</a></td></tr>}
     {pkg.SystemRequirements && <tr><td>System Requirements</td><td>{pkg.SystemRequirements}</td></tr>}
+    {pkg.Updated && <tr><td>Last updated</td><td>{pkg.Updated}</td></tr>}
+    {pkg.since && <tr><td>In Bioconductor since</td><td>{sinceLabel(pkg.since)}</td></tr>}
     {pkg.PackageStatus && <tr><td>Status</td><td>{pkg.PackageStatus}</td></tr>}
-    {pkg.Rank && <tr><td>Downloads rank</td><td>{pkg.Rank}</td></tr>}
+    {pkg.DownloadRank && <tr><td>Downloads rank</td><td>{pkg.DownloadRank} of {repoSize.toLocaleString('en-US')}</td></tr>}
     {pkg.git_branch && <tr><td>Source branch</td><td>{pkg.git_branch}</td></tr>}
+    {hasBuildReport && (
+      <tr>
+        <td>Build report</td>
+        <td><a href={buildReport}>Bioconductor build system</a>{universe && <>, <a href={`https://${universe}.r-universe.dev/${name}`}>r-universe</a></>}</td>
+      </tr>
+    )}
     {pkg.biocViews && (
       <tr><td>biocViews</td><td>{asArray(pkg.biocViews).join(', ')}</td></tr>
     )}
+    <tr>
+      <td>Package Short Url</td>
+      <!-- Text, not a link: it is a Worker redirect, so no file in dist backs it. -->
+      <td title={`For citation in publications, etc., please use DOI: ${doi}`}>https://bioconductor.org/packages/{name}/</td>
+    </tr>
   </tbody>
 </table>
+
+<PackageCitation pkg={pkg} name={name} version={version} repo={repo} doi={doi} />
 
 {vignettes.length > 0 && (
   <>
@@ -121,8 +179,8 @@ BiocManager::install("${name}")`}</code></pre>
     {depFields.map(([label, list]) =>
       asArray(list).length > 0 && (
         <p class="deps"><strong>{label}:</strong>{' '}
-          {asArray(list).map((d, i) => (
-            <>{i > 0 && ', '}<a href={linkDep(d)}>{d}</a></>
+          {depLinks(list).map(([d, href], i) => (
+            <>{i > 0 && ', '}{href ? <a href={href}>{d}</a> : d}</>
           ))}
         </p>
       )
@@ -136,11 +194,15 @@ BiocManager::install("${name}")`}</code></pre>
     {revFields.map(([label, list]) =>
       asArray(list).length > 0 && (
         <p class="revdeps"><strong>{label}</strong> ({asArray(list).length}):{' '}
-          {asArray(list).map((d, i) => (
-            <>{i > 0 && ', '}<a href={linkDep(d)}>{d}</a></>
+          {depLinks(list).map(([d, href], i) => (
+            <>{i > 0 && ', '}{href ? <a href={href}>{d}</a> : d}</>
           ))}
         </p>
       )
     )}
   </details>
 )}
+
+<style>
+  .package-versions .current { font-weight: bold; }
+</style>

@@ -1,12 +1,26 @@
 """python3 -m unittest discover -s pipeline -p 'test_*.py'"""
 import unittest
+from pipeline import packages
 
-from pipeline.packages import apply_downloads, bin_dirs
+from pipeline.packages import apply_downloads, bin_dirs, rank_by_score
 
 
 def index(src, win=None, arm=None, x86=None):
     return {"source.ver": src, "win.binary.ver": win or {},
             "mac.binary.sonoma-arm64.ver": arm or {}, "mac.binary.big-sur-x86_64.ver": x86 or {}}
+
+
+class SoftwareOnly(unittest.TestCase):
+    def test_drops_packages_that_belong_to_another_repository(self):
+        # ALL is an experiment-data package, TCGAWorkflow an unserved workflow
+        # (named by the workflows repository's VIEWS, absent from its PACKAGES).
+        bioc = {"limma": {}, "ALL": {}, "TCGAWorkflow": {}}
+        others = [{"org.Hs.eg.db"}, {"ALL"}, {"TCGAWorkflow"}]
+        self.assertEqual(sorted(packages.software_only(bioc, others)), ["limma"])
+
+    def test_keeps_unserved_software_absent_from_every_set(self):
+        self.assertEqual(sorted(packages.software_only({"limma": {}, "BPRMeth": {}}, [{"ALL"}, set(), set()])),
+                         ["BPRMeth", "limma"])
 
 
 class ApplyDownloads(unittest.TestCase):
@@ -46,6 +60,17 @@ class ApplyDownloads(unittest.TestCase):
     def test_arm64_directory_follows_the_r_version(self):
         self.assertIn("mac.binary.sonoma-arm64.ver", bin_dirs("4.6"))
         self.assertIn("mac.binary.big-sur-arm64.ver", bin_dirs("4.5"))
+
+
+class RankByScore(unittest.TestCase):
+    def test_most_downloaded_is_rank_one_and_ties_share_the_best_rank(self):
+        scores = {"a": 50, "b": 90, "c": 50, "d": 10}
+        self.assertEqual(rank_by_score(scores, ["a", "b", "c", "d"]),
+                         {"b": 1, "a": 2, "c": 2, "d": 4})
+
+    def test_unscored_package_ranks_last_and_removed_ones_take_no_place(self):
+        scores = {"a": 5, "gone": 99}
+        self.assertEqual(rank_by_score(scores, ["a", "new"]), {"a": 1, "new": 2})
 
 
 if __name__ == "__main__":

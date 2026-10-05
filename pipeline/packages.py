@@ -14,8 +14,9 @@ Origins, per repository:
   data/experiment              ) The maintainer's own file, passed through the
   workflows                    ) repository untouched. See pipeline/tarballs.py.
   reverse dependencies         computed across all four repos + CRAN PACKAGES
-  Rank                         bio-web-stats (separate service; served under
-                                             the site hostname but not site output)
+  DownloadRank                 bio-web-stats download scores (separate service;
+                                             served under the site hostname but not
+                                             site output), ranked within the repository
 
 `--data-origin views` restores the old circular fetch of VIEWS off
 bioconductor.org. It is kept only so the two can be compared; it cannot survive
@@ -36,7 +37,7 @@ Usage:
 
 import argparse, collections, json, os, re, sys, urllib.request
 
-from . import net, tarballs
+from . import net, since, tarballs
 
 UA = {"User-Agent": "Mozilla/5.0 bioc-website/packages-json-generator"}
 SITE = "https://bioconductor.org"
@@ -130,6 +131,11 @@ def from_runiverse(universe, branch):
                 rec[k] = re.sub(r"\s+", " ", str(p[k])).strip()
         if p.get("biocViews"):
             rec["biocViews"] = split_list(p["biocViews"])
+        # r-universe's own `Packaged` dates its rebuild (weeks to months after
+        # Bioconductor's build), so use the date of the commit it built. Within
+        # ~2 days before the tarball's `Packaged`.
+        if updated := net.commit_date((p.get("_commit") or {}).get("time")):
+            rec["Updated"] = updated
         rec["git_branch"] = branch
         if p.get("Version"):
             rec["source.ver"] = f"src/contrib/{name}_{p['Version']}.tar.gz"
@@ -144,6 +150,18 @@ def from_runiverse(universe, branch):
     return out
 
 
+def software_only(bioc, others):
+    """The universes also hold experiment-data and workflow packages, which
+    Bioconductor publishes in other repositories; a package belongs to exactly
+    one repository, so r-universe records named in any other repository's set
+    are not software. Packages that failed to build this cycle are in no
+    PACKAGES index but are still kept (their landing pages must exist), unless
+    another repository lists them: unserved workflows and data packages appear
+    in that repository's VIEWS only, so `others` must include those names."""
+    taken = set().union(*others)
+    return {name: rec for name, rec in bioc.items() if name not in taken}
+
+
 def from_views(version, repo, branch):
     """Fallback for repositories with no origin outside the site yet."""
     dcf = parse_dcf(fetch(f"{SITE}/packages/{version}/{repo}/VIEWS"))
@@ -154,6 +172,9 @@ def from_views(version, repo, branch):
             if k in UNUSED:
                 continue
             rec[k] = split_list(v) if k in ARRAY_FIELDS else v
+        updated = net.packaged_date(rec.pop("Packaged", None))
+        if updated:
+            rec["Updated"] = updated
         for k in ("hasNEWS", "hasREADME", "hasINSTALL", "hasLICENSE"):
             if k in rec:
                 rec[k] = str(rec[k]).strip().upper() == "TRUE"
@@ -220,6 +241,8 @@ def apply_downloads(pkgs, idx, rver):
         else:
             if rec.get("Version") and rec["Version"] != src:
                 corrected[name] = rec["Version"]
+                # Updated dates the origin's build, not the version shown.
+                rec.pop("Updated", None)
             rec["Version"] = src
             rec["source.ver"] = f"src/contrib/{name}_{src}.tar.gz"
         for field, (d, ext) in dirs.items():
@@ -231,14 +254,17 @@ def apply_downloads(pkgs, idx, rver):
     return corrected, sorted(unserved)
 
 
-def load_ranks(repo, version):
-    """Rank is not package metadata and not site output — it comes from
-    bio-web-stats, a separate Flask/Postgres service fed by a daily Athena job
+def load_scores(repo):
+    """Download scores are not package metadata and not site output — they come
+    from bio-web-stats, a separate Flask/Postgres service fed by a daily Athena job
     over CloudFront logs. Confirmed live: /packages/stats/* answers with
     `Server: waitress` while every other path answers `Server: Apache/2.4.52`,
     so this is already decoupled from master and is a genuine origin. It is
     only *addressed* through the shared hostname — which means the routing for
     this path is a must-preserve item during any cutover.
+
+    The file's second column is a score (distinct IPs over the last 12 months),
+    not a rank; see rank_by_score().
 
     Note the directory and filename slugs differ for the data repositories."""
     dirslug, fileslug = {
@@ -250,17 +276,30 @@ def load_ranks(repo, version):
     txt = fetch(f"{SITE}/packages/stats/{dirslug}/{fileslug}_pkg_scores.tab", optional=True)
     if not txt:
         return {}
-    ranks = {}
+    scores = {}
     for line in txt.splitlines():
         if line.startswith("Package\t"):
             continue
         parts = line.split("\t")
         if len(parts) >= 2:
             try:
-                ranks[parts[0].strip()] = int(parts[1])
+                scores[parts[0].strip()] = int(parts[1])
             except ValueError:
                 pass
-    return ranks
+    return scores
+
+
+def rank_by_score(scores, names):
+    """{package: rank} within `names`: 1 is the most downloaded.
+
+    Ties share the best rank of the group, and a package with no score ranks as
+    zero, as in the legacy scripts/badge_generation.rb getRanking(). Scores for
+    packages outside `names` (removed from the release) do not take a place."""
+    ordered = sorted((scores.get(n, 0) for n in names), reverse=True)
+    first = {}
+    for i, score in enumerate(ordered, 1):
+        first.setdefault(score, i)
+    return {n: first[scores.get(n, 0)] for n in names}
 
 
 # ------------------------------------------------------------------ build ---
@@ -329,6 +368,10 @@ def main(argv=None):
             repos[repo] = from_views(args.bioc, repo, branch)
             provenance[repo] = "VIEWS (circular)"
 
+    if args.software_origin == "runiverse":
+        repos["bioc"] = software_only(
+            repos["bioc"], [set(repos[r]) | set(from_views(args.bioc, r, branch)) for r in REPOS[1:]])
+
     # Reverse dependencies span every repository AND CRAN — a Bioconductor page
     # lists CRAN packages that depend on it. So the graph is built from all four
     # repos plus CRAN's own PACKAGES index, which is a genuine external origin.
@@ -356,20 +399,35 @@ def main(argv=None):
         print(f"[{repo}] downloads from the repository's PACKAGES: {len(corrected)} versions "
               f"corrected, {len(unserved)} not in the repository", file=sys.stderr)
 
+    # First release and release list per package, from the releases already on
+    # disk. If any release from 2.5 up to this one is missing, "first seen" and
+    # the list are wrong, so both fields are left out, loudly.
+    first, seen, where = since.history(args.out, before=args.bioc)
+    if gaps := since.missing(seen, cfg, args.bioc):
+        print(f"  ! no data in {args.out} for releases {', '.join(gaps)}: 'since' and 'releases' omitted",
+              file=sys.stderr)
+        first = None
+    else:
+        records = {v: since.record(v, cfg) for v in set(first.values()) | {args.bioc}}
+
     total = 0
     for repo, pkgs in repos.items():
-        ranks = load_ranks(repo, args.bioc)
+        scores = load_scores(repo)
+        ranks = rank_by_score(scores, pkgs) if scores else {}
         for name, rec in pkgs.items():
             for field in REV.values():
                 if rev[name][field]:
                     rec[field] = sorted(rev[name][field], key=str.lower)
             if name in ranks:
-                rec["Rank"] = ranks[name]
+                rec["DownloadRank"] = ranks[name]
             # Repository root term -- see ROOT_TERM. Sorted so the order does not
             # depend on whether the package happened to declare it itself.
             root = ROOT_TERM.get(repo)
             if root:
                 rec["biocViews"] = sorted(set(rec.get("biocViews", [])) | {root})
+            if first is not None:
+                rec["since"] = records[first.get(name, args.bioc)]
+                rec["releases"] = since.releases(where.get(name, {}), args.bioc, repo)
             rec["dependencyCount"] = str(len({
                 dep_name(d) for role in ("Depends", "Imports", "LinkingTo")
                 for d in rec.get(role, []) if dep_name(d) != "R"
@@ -385,13 +443,14 @@ def main(argv=None):
     print("\nprovenance:", file=sys.stderr)
     for repo, src in provenance.items():
         print(f"  {repo:<18} {src}", file=sys.stderr)
-    print(f"  {'Rank':<18} bio-web-stats (separate service, genuine origin)", file=sys.stderr)
+    print(f"  {'DownloadRank':<18} bio-web-stats (separate service, genuine origin)", file=sys.stderr)
     print(f"  {'reverse deps':<18} computed across all four repos + CRAN", file=sys.stderr)
 
     # Provenance is written next to the data, not just printed. A build that
     # silently fell back to a circular source must be detectable afterwards.
     meta = {"bioc_version": args.bioc, "branch": branch, "origins": provenance,
-            "tarball_reports": tarball_reports, "r_version": rver, "downloads": downloads}
+            "tarball_reports": tarball_reports, "r_version": rver, "downloads": downloads,
+            "since": "omitted: no history" if first is None else "computed"}
     with open(os.path.join(args.out, args.bioc, "provenance.json"), "w") as fh:
         json.dump(meta, fh, indent=1)
 
