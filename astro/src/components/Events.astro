@@ -11,6 +11,7 @@ import { eventDate } from '../lib/content.js';
 
 const { events = [] } = Astro.props;
 ---
+{events.length === 0 && <p class="text-small container">No upcoming events.</p>}
 {events.map((e) => (
   <>
     <a href={e.link?.url ?? e.url}>

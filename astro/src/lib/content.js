@@ -31,13 +31,13 @@ export function loadEvents() {
   return read('events.json');
 }
 
-/** Upcoming events first, then most recent past ones — what `_top_events` did. */
+/** Only events that haven't ended yet, ordered by start date. */
 export function topEvents(events, limit = 5) {
   const today = new Date().toISOString().slice(0, 10);
   const key = (e) => String(e.start ?? '');
-  const upcoming = events.filter((e) => key(e) >= today).sort((a, b) => key(a).localeCompare(key(b)));
-  const past = events.filter((e) => key(e) < today).sort((a, b) => key(b).localeCompare(key(a)));
-  return [...upcoming, ...past].slice(0, limit);
+  const endDate = (e) => String(e.end ?? e.start ?? ''); // single-day events have no end (see eventDate)
+  const upcoming = events.filter((e) => endDate(e) >= today).sort((a, b) => key(a).localeCompare(key(b)));
+  return upcoming.slice(0, limit);
 }
 
 /**
