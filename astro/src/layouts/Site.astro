@@ -18,9 +18,11 @@
  */
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import { canonicalUrl } from '../lib/canonical.js';
 import '../styles/site-overrides.css';
 
-const { title, description, fullwidth = false, bodyClass } = Astro.props;
+// `canonical` is a path; it defaults to the page's own.
+const { title, description, fullwidth = false, bodyClass, canonical = Astro.url.pathname } = Astro.props;
 
 const DESCRIPTION =
   'The Bioconductor project aims to develop and share open source software for ' +
@@ -53,6 +55,7 @@ const SCRIPTS = [
     <meta name="robots" content="all" />
     <meta name="description" content={description || DESCRIPTION} />
     <title>{title ? `Bioconductor - ${title}` : 'Bioconductor'}</title>
+    <link rel="canonical" href={canonicalUrl(canonical)} />
     {STYLES.map((s) => <link rel="stylesheet" type="text/css" href={`/style/${s}`} />)}
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   </head>
