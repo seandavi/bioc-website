@@ -69,24 +69,40 @@ export function loadTree(version) {
   return JSON.parse(readFileSync(f, 'utf8'));
 }
 
-// package name -> [{ version, repo, channel }], newest release first, over
-// every release that ships it, so a package page can link to its siblings and
-// every link resolves. `channel` is 'devel' for the newest release present and
-// 'release' for its predecessor (as in pages/packages/[...slug].astro).
+// This package in every release that ships it, as [{ version, repo, channel }]
+// newest first, so a package page can link to its siblings and every link
+// resolves. `channel` is 'devel' for the newest release on disk and 'release'
+// for its predecessor (as in pages/packages/[...slug].astro).
+//
+// The list comes from the record's `releases` field ([[version, repo], ...],
+// written by the pipeline, which sees every release). CI builds from a snapshot
+// holding only the two live releases, so walking the disk there would never
+// reach the old versions. The walk remains as the fallback for a record without
+// the field (a stale snapshot) and for malformed values.
 let releasesOf;
-export function releasesOfPackage(name) {
-  if (!releasesOf) {
-    releasesOf = new Map();
-    const all = versions().reverse();
-    all.forEach((version, i) => {
-      const channel = i === 0 ? 'devel' : i === 1 ? 'release' : null;
-      for (const repo of reposFor(version)) {
-        for (const n of Object.keys(loadRepo(version, repo))) {
-          if (!releasesOf.has(n)) releasesOf.set(n, []);
-          releasesOf.get(n).push({ version, repo, channel });
+export function releasesOfPackage(name, pkg) {
+  const live = versions().reverse();
+  const channelOf = (v) => (v === live[0] ? 'devel' : v === live[1] ? 'release' : null);
+  let list = (Array.isArray(pkg?.releases) ? pkg.releases : [])
+    .filter((e) => Array.isArray(e) && /^\d+\.\d+$/.test(e[0]) && typeof e[1] === 'string')
+    .map(([version, repo]) => ({ version, repo }));
+  if (list.length === 0) {
+    if (!releasesOf) {
+      releasesOf = new Map();
+      for (const version of live) {
+        for (const repo of reposFor(version)) {
+          for (const n of Object.keys(loadRepo(version, repo))) {
+            if (!releasesOf.has(n)) releasesOf.set(n, []);
+            releasesOf.get(n).push({ version, repo });
+          }
         }
       }
-    });
+    }
+    list = releasesOf.get(name) ?? [];
   }
-  return releasesOf.get(name) ?? [];
+  // One entry per version: a name in two repos of one release lists it once.
+  const seen = new Set();
+  return list
+    .filter((r) => !seen.has(r.version) && seen.add(r.version))
+    .map((r) => ({ ...r, channel: channelOf(r.version) }));
 }

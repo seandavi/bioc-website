@@ -38,7 +38,7 @@ const downloads = [
 ].filter(([, path]) => path);
 import { releasesOfPackage } from '../lib/packages.js';
 // This package in every release that ships it. Plain links, so it works without JS.
-const releases = releasesOfPackage(name);
+const releases = releasesOfPackage(name, pkg);
 const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
 
 const repoLabels = {
@@ -67,15 +67,19 @@ const repoLabels = {
   {releases.length > 1 && (
     <details class="package-versions" data-pagefind-ignore>
       <summary>Other Bioconductor versions</summary>
+      <p>devel is the development version; release is the current stable one.</p>
       <p>
-        {releases.map((r, i) => (
-          <>
-            {i > 0 && ', '}
-            {r.version === version
-              ? <strong aria-current="page">{r.version}{r.channel && ` (${r.channel})`}</strong>
-              : <a href={`/packages/${r.version}/${r.repo}/html/${name}.html`}>{r.version}{r.channel && ` (${r.channel})`}</a>}
-          </>
-        ))}
+        {releases.map((r, i) => {
+          const label = `${r.version}${r.channel ? ` (${r.channel})` : ''}`;
+          return (
+            <>
+              {i > 0 && ', '}
+              {r.version === version
+                ? <span class="current" aria-current="page">{label}</span>
+                : <a href={`/packages/${r.version}/${r.repo}/html/${name}.html`} aria-label={`Bioconductor ${label}`}>{label}</a>}
+            </>
+          );
+        })}
       </p>
     </details>
   )}
@@ -163,3 +167,7 @@ BiocManager::install("${name}")`}</code></pre>
     )}
   </details>
 )}
+
+<style>
+  .package-versions .current { font-weight: bold; }
+</style>
