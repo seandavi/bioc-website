@@ -5,6 +5,15 @@ const ORIGIN = 'https://bioconductor.org';
 // sitemaps.org limit per file. 50,000 short URLs is ~5 MB, far under the 50 MB cap.
 const MAX_URLS = 50000;
 
+// bioc-edge's redirects.json is the source of truth for these: the build still
+// renders them, but production answers 301, and a sitemap must not list a
+// redirect. Everything under how-to/ moved to contributions.bioconductor.org
+// except the two index pages (checked with curl, 2026-10-05).
+const redirected = (url) =>
+  (url.startsWith('/developers/how-to/') && url !== '/developers/how-to/' && url !== '/developers/how-to/git/') ||
+  url === '/developers/package-end-of-life/' ||
+  url === '/developers/package-submission/';
+
 // Canonical URLs only: the /release/ and /devel/ aliases (never the numbered
 // versions, which carry canonicals pointing here), and nothing robots.txt
 // disallows. Grouped so each group shards independently.
@@ -12,9 +21,9 @@ function groups() {
   const { release, devel } = liveVersions();
   const g = {
     // The renderable prose set of [...page].astro, minus the search page it
-    // skips and robots.txt disallows.
+    // skips and robots.txt disallows, and minus URLs the Worker redirects.
     pages: loadPages()
-      .filter((p) => p.renderable && p.url !== '/help/search/')
+      .filter((p) => p.renderable && p.url !== '/help/search/' && !redirected(p.url))
       .map((p) => p.url),
     release: [],
     devel: [],
