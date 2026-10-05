@@ -118,7 +118,7 @@ def versions_from_packages(repo, bioc, mirror=net.MIRROR):
 # Fields present in DESCRIPTION that no page reads, or that VIEWS never carried.
 # Dropped so the output stays comparable to the existing packages.json contract.
 DROP = {
-    "MD5sum", "NeedsCompilation", "Packaged", "Repository", "Date/Publication",
+    "MD5sum", "NeedsCompilation", "Repository", "Date/Publication",
     "VignetteBuilder", "OS_type", "License_is_FOSS", "License_restricts_use",
     "organism", "Encoding", "RoxygenNote", "Date", "Authors@R", "LazyLoad",
     "LazyData", "Collate", "ByteCompile", "biocViewsVocab", "git_url",
@@ -140,6 +140,10 @@ def to_record(dcf, branch):
         if k in DROP:
             continue
         rec[k] = net.split_list(v) if k in ARRAY_FIELDS else re.sub(r"\s+", " ", v).strip()
+    # `Updated`: the tarball's DESCRIPTION `Packaged` (Bioconductor's build date).
+    updated = net.packaged_date(rec.pop("Packaged", None))
+    if updated:
+        rec["Updated"] = updated
     rec["git_branch"] = branch
     if rec.get("Version"):
         rec["source.ver"] = "src/contrib/%s_%s.tar.gz" % (rec["Package"], rec["Version"])
