@@ -21,6 +21,7 @@ const disallow = [
   '/*//',
   // Legacy aliases of the release/devel trees.
   '/packages/bioc/', '/packages/data/',
+  // kept until seandavi/bioc-website#50 (canonical/noindex on these URLs, bioc-edge#55)
   ...[...before2_5, ...versions()].map((v) => `/packages/${v}/`),
 ];
 
