@@ -363,11 +363,12 @@ def main(argv=None):
         print(f"[{repo}] downloads from the repository's PACKAGES: {len(corrected)} versions "
               f"corrected, {len(unserved)} not in the repository", file=sys.stderr)
 
-    # First release per package, from the releases already on disk. Without the
-    # 2.5 data "first seen" is meaningless, so the field is left out, loudly.
-    first, seen = since.history(args.out, before=args.bioc)
+    # First release and release list per package, from the releases already on
+    # disk. Without the 2.5 data "first seen" is meaningless, so both fields are
+    # left out, loudly.
+    first, seen, where = since.history(args.out, before=args.bioc)
     if args.bioc != since.EARLIEST and since.EARLIEST not in seen:
-        print(f"  ! no {since.EARLIEST} data in {args.out}: 'since' omitted", file=sys.stderr)
+        print(f"  ! no {since.EARLIEST} data in {args.out}: 'since' and 'releases' omitted", file=sys.stderr)
         first = None
     else:
         records = {v: since.record(v, cfg) for v in set(first.values()) | {args.bioc}}
@@ -388,6 +389,7 @@ def main(argv=None):
                 rec["biocViews"] = sorted(set(rec.get("biocViews", [])) | {root})
             if first is not None:
                 rec["since"] = records[first.get(name, args.bioc)]
+                rec["releases"] = since.releases(where.get(name, {}), args.bioc, repo)
             rec["dependencyCount"] = str(len({
                 dep_name(d) for role in ("Depends", "Imports", "LinkingTo")
                 for d in rec.get(role, []) if dep_name(d) != "R"

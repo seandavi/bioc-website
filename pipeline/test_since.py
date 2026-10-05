@@ -6,7 +6,7 @@ import unittest
 
 from pipeline.net import packaged_date
 from pipeline.packages import apply_downloads
-from pipeline.since import history, record
+from pipeline.since import history, record, releases
 from pipeline.tarballs import to_record
 
 CFG = {
@@ -24,9 +24,35 @@ class History(unittest.TestCase):
                 os.makedirs(f"{d}/{version}/bioc")
                 with open(f"{d}/{version}/bioc/packages.json", "w") as fh:
                     json.dump({n: {} for n in names}, fh)
-            first, seen = history(d, before="3.11")
+            first, seen, _ = history(d, before="3.11")
         self.assertEqual(first, {"a": "2.5", "b": "3.9", "c": "3.10"})
         self.assertEqual(seen, ["2.5", "3.9", "3.10"])
+
+    def test_repo_per_release_incl_newer_ones_but_not_before_itself(self):
+        with tempfile.TemporaryDirectory() as d:
+            for version, repo, names in [("3.9", "bioc", ["a", "m"]), ("3.10", "data/annotation", ["m"]),
+                                         ("3.11", "bioc", ["a"]), ("3.12", "workflows", ["a"])]:
+                os.makedirs(f"{d}/{version}/{repo}")
+                with open(f"{d}/{version}/{repo}/packages.json", "w") as fh:
+                    json.dump({n: {} for n in names}, fh)
+            first, _, where = history(d, before="3.11")
+        self.assertEqual(where["m"], {"3.9": "bioc", "3.10": "data/annotation"})
+        self.assertEqual(where["a"], {"3.9": "bioc", "3.12": "workflows"})
+        self.assertEqual(first, {"a": "3.9", "m": "3.9"})  # 3.12 is newer: no effect on "first"
+
+
+class Releases(unittest.TestCase):
+    def test_newest_first_in_numeric_order_with_the_repo_of_each_release(self):
+        where = {"3.9": "bioc", "3.10": "data/annotation", "3.2": "bioc"}
+        self.assertEqual(releases(where, "3.11", "data/experiment"),
+                         [["3.11", "data/experiment"], ["3.10", "data/annotation"], ["3.9", "bioc"],
+                          ["3.2", "bioc"]])
+
+    def test_a_package_new_in_the_release_being_built_lists_only_it(self):
+        self.assertEqual(releases({}, "3.24", "bioc"), [["3.24", "bioc"]])
+
+    def test_the_release_being_built_wins_over_stale_data_on_disk(self):
+        self.assertEqual(releases({"3.24": "bioc"}, "3.24", "workflows"), [["3.24", "workflows"]])
 
 
 class Record(unittest.TestCase):
