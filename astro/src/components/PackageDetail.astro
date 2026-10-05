@@ -6,6 +6,7 @@
  * for the collapsible sections, and a details table for the metadata.
  */
 import { depName, asArray } from '../lib/packages.js';
+import PackageCitation from './PackageCitation.astro';
 
 // `indexed` marks this page for the build-time Pagefind index (release pages
 // only: indexing devel too would put near-duplicates in every result list).
@@ -51,19 +52,6 @@ const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
 // Same DOI on every page kind: it is minted per package name and always
 // redirects to the current release (devel if the package isn't released yet).
 const doi = `10.18129/B9.bioc.${name}`;
-// R's citation() names the Authors@R people with role "aut"; the data contract
-// carries only the Author field, so rebuild that list from it: split on commas
-// outside [roles]/(comments), keep the "aut" entries when roles are present
-// (else everyone), drop roles, comments and e-mail addresses. Names stay as
-// written: no guessing at family/given order.
-const citeAuthors = (author = '') => {
-  const people = author.split(/,(?![^\[(]*[\])])/).map((s) => s.trim()).filter(Boolean);
-  const aut = people.filter((p) => /\[[^\]]*\baut\b/.test(p));
-  return (aut.length ? aut : people)
-    .map((p) => p.replace(/\s*(\[[^\]]*\]|\([^)]*\)|<[^>]*>)/g, '').trim())
-    .filter(Boolean).join(', ');
-};
-const citation = citeAuthors(pkg.Author);
 
 const repoLabels = {
   'bioc': 'Software', 'data/annotation': 'Annotation',
@@ -124,20 +112,13 @@ BiocManager::install("${name}")`}</code></pre>
     )}
     <tr>
       <td>Package Short Url</td>
-      <td><a title={`For citation in publications, etc., please use DOI: ${doi}`} href={`/packages/${name}/`}>{`https://bioconductor.org/packages/${name}/`}</a></td>
+      <!-- Text, not a link: it is a Worker redirect, so no file in dist backs it. -->
+      <td title={`For citation in publications, etc., please use DOI: ${doi}`}>https://bioconductor.org/packages/{name}/</td>
     </tr>
   </tbody>
 </table>
 
-<h2>Citation</h2>
-<p class="citation">
-  {citation && `${citation}. `}<em>{name}: {pkg.Title}</em>. doi:<a href={`https://doi.org/${doi}`}>{doi}</a>,
-  R package version {pkg.Version}, <a href={`https://bioconductor.org/packages/${name}`}>{`https://bioconductor.org/packages/${name}`}</a>.
-</p>
-<p>
-  Generated from the package metadata. From within R, enter <code>citation("{name}")</code>
-  for the authoritative form, including any package-specific citation.
-</p>
+<PackageCitation pkg={pkg} name={name} version={version} repo={repo} doi={doi} />
 
 {vignettes.length > 0 && (
   <>

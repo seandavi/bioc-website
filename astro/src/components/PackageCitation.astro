@@ -1,0 +1,58 @@
+---
+/**
+ * The Citation section of a package page. The legacy page loaded R's own
+ * citation("pkg") output (a per-package citation.html, rendered from the
+ * package's inst/CITATION) into #bioc-citation by script. Same here: the
+ * server-rendered text is generated from the package metadata and is the
+ * fallback when there is no JS or no citation page; the script replaces it
+ * when the page exists. The ids differ from the legacy ones on purpose: the
+ * legacy bioconductor.js (still loaded) acts on #bioc-citation and would hide
+ * the fallback whenever the fetch fails.
+ *
+ * Annotation packages are left on the fallback: only about one in six of them
+ * has a citation page (checked 2026-10-05, 3.23 and 3.24), the rest 404.
+ * Failed builds have no Title or Version, so there is nothing to cite.
+ */
+import { citationAuthors } from '../lib/packages.js';
+
+const { pkg, name, version, repo, doi } = Astro.props;
+const authors = citationAuthors(pkg.Author);
+const title = pkg.Title?.replace(/[.\s]+$/, '');
+const citationUrl = repo === 'data/annotation'
+  ? undefined
+  : `/packages/${version}/${repo}/citations/${name}/citation.html`;
+---
+{title && pkg.Version && (
+  <div id="citation" data-pagefind-ignore>
+    <h2>Citation</h2>
+    <p>From within R, enter <code>citation("{name}")</code>:</p>
+    <div id="citation-text" class="bioc-citation" data-citation-url={citationUrl}>
+      <p class="citation">
+        {authors && `${authors}. `}<em>{name}: {title}</em>. doi:<a href={`https://doi.org/${doi}`}>{doi}</a>,
+        R package version {pkg.Version}, {`https://bioconductor.org/packages/${name}`}.
+      </p>
+      <p><small>Generated from the package metadata; it may differ from the package's own citation.</small></p>
+    </div>
+  </div>
+)}
+
+<script>
+  const box = document.getElementById('citation-text');
+  if (box?.dataset.citationUrl) {
+    try {
+      const response = await fetch(box.dataset.citationUrl);
+      if (response.ok && new URL(response.url).origin === location.origin
+          && /html/.test(response.headers.get('content-type') ?? '')) {
+        // Same clean-ups as the legacy loader (R emits stray braces and an
+        // empty "(????)" year for some bibentries).
+        const html = (await response.text())
+          .replace(/}. /g, '').replace(/}.</g, '<').replace(/}."/g, '"').replace(' (????)', '');
+        const { body } = new DOMParser().parseFromString(html, 'text/html');
+        body.querySelectorAll('script').forEach((s) => s.remove());
+        if (body.textContent.trim()) box.replaceChildren(...body.childNodes);
+      }
+    } catch {
+      // Keep the generated fallback.
+    }
+  }
+</script>
