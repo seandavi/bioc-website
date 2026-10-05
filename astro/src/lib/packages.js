@@ -43,6 +43,38 @@ export function depName(entry) {
   return String(entry).split(/[ (]/)[0];
 }
 
+// The packages shipped with R itself (plus "R" in Depends): no page anywhere.
+const BASE_R = new Set([
+  'R', 'base', 'compiler', 'datasets', 'graphics', 'grDevices', 'grid', 'methods',
+  'parallel', 'splines', 'stats', 'stats4', 'tcltk', 'tools', 'utils',
+]);
+
+// version -> Map(package name -> repo) over every repo of that release, so a
+// dependency can be told apart as Bioconductor (and which repo) or not.
+const biocRepos = new Map();
+function biocRepoOf(version, name) {
+  if (!biocRepos.has(version)) {
+    const m = new Map();
+    for (const repo of reposFor(version)) {
+      for (const n of Object.keys(loadRepo(version, repo))) m.set(n, repo);
+    }
+    biocRepos.set(version, m);
+  }
+  return biocRepos.get(version).get(name);
+}
+
+// Where a dependency entry points: its Bioconductor page in this release,
+// CRAN for anything else (`cran: false` for reverse dependencies, which are
+// Bioconductor packages, so a miss there has no page at all), or null when
+// there is nothing to link to.
+export function depHref(version, entry, { cran = true } = {}) {
+  const name = depName(entry);
+  if (BASE_R.has(name)) return null;
+  const repo = biocRepoOf(version, name);
+  if (repo) return `/packages/${version}/${repo}/html/${name}.html`;
+  return cran ? `https://cran.r-project.org/package=${name}` : null;
+}
+
 export function asArray(v) {
   if (v == null) return [];
   return Array.isArray(v) ? v : [v];

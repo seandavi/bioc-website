@@ -5,16 +5,11 @@
  * style/pages/packages.css applies: `<details>` + `summary.package-details`
  * for the collapsible sections, and a details table for the metadata.
  */
-import { depName, asArray } from '../lib/packages.js';
+import { depHref, asArray } from '../lib/packages.js';
 
 // `indexed` marks this page for the build-time Pagefind index (release pages
 // only: indexing devel too would put near-duplicates in every result list).
 const { pkg, name, version, repo, indexed = false } = Astro.props;
-
-// Cross-repo links are not resolved: a dependency named here may live in any of
-// the four repositories or on CRAN, and guessing wrong produces a confident 404.
-// Staying within version+repo matches the current site's behaviour.
-const linkDep = (d) => `/packages/${version}/${repo}/html/${depName(d)}.html`;
 
 const depFields = [
   ['Depends', pkg.Depends], ['Imports', pkg.Imports], ['LinkingTo', pkg.LinkingTo],
@@ -122,7 +117,7 @@ BiocManager::install("${name}")`}</code></pre>
       asArray(list).length > 0 && (
         <p class="deps"><strong>{label}:</strong>{' '}
           {asArray(list).map((d, i) => (
-            <>{i > 0 && ', '}<a href={linkDep(d)}>{d}</a></>
+            <>{i > 0 && ', '}{depHref(version, d) ? <a href={depHref(version, d)}>{d}</a> : d}</>
           ))}
         </p>
       )
@@ -137,7 +132,7 @@ BiocManager::install("${name}")`}</code></pre>
       asArray(list).length > 0 && (
         <p class="revdeps"><strong>{label}</strong> ({asArray(list).length}):{' '}
           {asArray(list).map((d, i) => (
-            <>{i > 0 && ', '}<a href={linkDep(d)}>{d}</a></>
+            <>{i > 0 && ', '}{depHref(version, d, { cran: false }) ? <a href={depHref(version, d, { cran: false })}>{d}</a> : d}</>
           ))}
         </p>
       )
