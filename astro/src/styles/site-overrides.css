@@ -15,3 +15,8 @@
 footer a {
   text-decoration: underline;
 }
+
+/* The column headings are `<a><h3>…</h3></a>`; keep them plain. */
+footer a:has(> h3) {
+  text-decoration: none;
+}
