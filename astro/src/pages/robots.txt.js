@@ -1,6 +1,6 @@
-// robots.txt (#33). astro/public/ is copied from upstream, so the build emits
-// it here; otherwise the Worker falls through to the legacy mirror's copy,
-// which blocks /packages/release/, /packages/devel/ and /biocViews/.
+// robots.txt (#33). The build emits it here (bioc.py does not copy upstream's
+// into astro/public/); otherwise the Worker falls through to the legacy
+// mirror's copy, which blocks /packages/release/ and /packages/devel/.
 import { versions } from '../lib/packages.js';
 
 // Release numbers older than the package data (JSON starts at 2.5), plus every
@@ -17,8 +17,11 @@ const disallow = [
   '/help/search/',
   // Package tarballs and binaries, wherever they are mirrored.
   '/*/src/contrib/', '/*/bin/', '/*.tar.gz$', '/*.tgz$', '/*.zip$',
-  // Double slashes: the same page under a different URL.
-  '/*//',
+  // Double slashes: the same page under a different URL ('/*//' needs a
+  // character before the pair, so a leading '//' is listed on its own).
+  '//', '/*//',
+  // The /next/ preview track is kept out of search (its pages are self-canonical).
+  '/next/',
   // Legacy aliases of the release/devel trees.
   '/packages/bioc/', '/packages/data/',
   // kept until seandavi/bioc-website#50 (canonical/noindex on these URLs, bioc-edge#55)
