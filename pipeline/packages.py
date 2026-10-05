@@ -110,12 +110,18 @@ def dep_name(entry):
 
 # ---------------------------------------------------------------- origins ---
 
-def from_runiverse(universe, branch):
-    """Software packages, from r-universe. A real origin."""
+def from_runiverse(universe, branch, published):
+    """Software packages, from r-universe. A real origin.
+
+    The universes also hold the experiment-data and workflow packages, which
+    Bioconductor publishes in other repositories; `published` is the names the
+    software repository itself serves, and anything else is not software."""
     pkgs = json.loads(fetch(f"https://{universe}.r-universe.dev/api/packages"))
     out = {}
     for p in pkgs:
         name = p["Package"]
+        if name not in published:
+            continue
         rec = {"Package": name, "Version": p.get("Version")}
         for role in ("Depends", "Imports", "Suggests", "LinkingTo", "Enhances"):
             vals = [d["package"] + (f" ({d['version']})" if d.get("version") else "")
@@ -288,11 +294,13 @@ def main(argv=None):
         sys.exit(f"config.yaml has no r_ver_for_bioc_ver for {args.bioc}")
     branch = "devel" if args.universe == "bioc" else "RELEASE_" + args.bioc.replace(".", "_")
     provenance, repos, tarball_reports = {}, {}, []
+    indexes = {}
 
     for repo in REPOS:
         if repo == "bioc" and args.software_origin == "runiverse":
             print(f"[{repo}] origin: r-universe ({args.universe})", file=sys.stderr)
-            repos[repo] = from_runiverse(args.universe, branch)
+            indexes[repo] = repo_index(repo, args.bioc, rver)
+            repos[repo] = from_runiverse(args.universe, branch, indexes[repo]["source.ver"])
             provenance[repo] = f"r-universe:{args.universe}"
         elif args.data_origin == "tarballs":
             # DESCRIPTION inside the source tarball -- the maintainer's own file,
@@ -351,7 +359,8 @@ def main(argv=None):
 
     downloads = {}
     for repo, pkgs in repos.items():
-        corrected, unserved = apply_downloads(pkgs, repo_index(repo, args.bioc, rver), rver)
+        idx = indexes[repo] if repo in indexes else repo_index(repo, args.bioc, rver)
+        corrected, unserved = apply_downloads(pkgs, idx, rver)
         downloads[repo] = {"version_corrected_from_origin": corrected, "not_in_repository": unserved}
         print(f"[{repo}] downloads from the repository's PACKAGES: {len(corrected)} versions "
               f"corrected, {len(unserved)} not in the repository", file=sys.stderr)
