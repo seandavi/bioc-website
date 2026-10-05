@@ -22,7 +22,7 @@ for (const f of walk('dist')) {
   const path = '/' + f.slice('dist/'.length);
   if (hits.length !== 1) { bad.push(`${path}: ${hits.length} canonical links`); continue; }
   const m = path.match(/^\/packages\/(\d+\.\d+)\//);
-  const want = (m && live[m[1]] ? path.replace(m[1], live[m[1]]) : path).replace(/\/index\.html$/, '/');
+  const want = (m && live[m[1]] ? path.replace(m[1], live[m[1]]) : path).replace(/\/index\.html$/, '/').replace(/^\/next\.html$/, '/next/');
   if (hits[0][1] !== 'https://bioconductor.org' + want) bad.push(`${path}: canonical ${hits[0][1]}, want ${want}`);
 }
 if (bad.length) {
