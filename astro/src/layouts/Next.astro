@@ -4,11 +4,18 @@
  * faithful port of the legacy chrome), this is the clean-slate look: system
  * fonts, no jQuery, no legacy CSS cascade, dark-mode aware. Content is static;
  * reactivity is layered over it per-page (ADR 0008 / #79).
+ *
+ * Deliberately absent: `data-pagefind-body`. These pages stay out of site
+ * search while they are a preview -- indexing them would put two hits in the
+ * results for every package, the /packages/ one and the /next/ one, with
+ * nothing telling a reader which is authoritative (#15).
  */
 const { title, description } = Astro.props;
 ---
 <!DOCTYPE html>
-<html lang="en">
+<!-- Same tag as Site.astro: Pagefind indexes per html lang, so a mismatch
+     would fork the index if these pages are ever indexed (#11, #15). -->
+<html lang="en-US">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
