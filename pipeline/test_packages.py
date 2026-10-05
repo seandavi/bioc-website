@@ -1,11 +1,7 @@
 """python3 -m unittest discover -s pipeline -p 'test_*.py'"""
-import json
 import unittest
-from unittest import mock
 
-from pipeline import packages
-
-from pipeline.packages import apply_downloads, bin_dirs
+from pipeline.packages import apply_downloads, bin_dirs, software_only
 
 
 def index(src, win=None, arm=None, x86=None):
@@ -13,19 +9,17 @@ def index(src, win=None, arm=None, x86=None):
             "mac.binary.sonoma-arm64.ver": arm or {}, "mac.binary.big-sur-x86_64.ver": x86 or {}}
 
 
-class FromRuniverse(unittest.TestCase):
-    def records(self, published):
-        # The bioc universe lists a data package (ALL) alongside software.
-        universe = json.dumps([{"Package": "limma", "Version": "3.68.5"},
-                               {"Package": "ALL", "Version": "1.54.0"}])
-        with mock.patch("pipeline.packages.fetch", return_value=universe):
-            return packages.from_runiverse("bioc", "devel", published)
+class SoftwareOnly(unittest.TestCase):
+    def test_drops_packages_that_belong_to_another_repository(self):
+        # ALL is an experiment-data package, TCGAWorkflow an unserved workflow
+        # (named by the workflows repository's VIEWS, absent from its PACKAGES).
+        bioc = {"limma": {}, "ALL": {}, "TCGAWorkflow": {}}
+        others = [{"org.Hs.eg.db"}, {"ALL"}, {"TCGAWorkflow"}]
+        self.assertEqual(sorted(software_only(bioc, others)), ["limma"])
 
-    def test_packages_the_software_repository_does_not_publish_are_dropped(self):
-        self.assertEqual(list(self.records({"limma": "3.68.5"})), ["limma"])
-
-    def test_nothing_is_added_for_published_names_missing_from_the_universe(self):
-        self.assertEqual(list(self.records({"limma": "3.68.5", "Ularcirc": "1.30.0"})), ["limma"])
+    def test_keeps_unserved_software_absent_from_every_set(self):
+        self.assertEqual(sorted(software_only({"limma": {}, "BPRMeth": {}}, [{"ALL"}, set(), set()])),
+                         ["BPRMeth", "limma"])
 
 
 class ApplyDownloads(unittest.TestCase):
