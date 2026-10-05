@@ -20,3 +20,31 @@ footer a {
 footer a:has(> h3) {
   text-decoration: none;
 }
+
+/* Mobile nav drawer (<= 1080px). Upstream's `.header-nav.active { height: 21rem }`
+ * plus `overflow: hidden` clips the search box and Get Started button. */
+@media (max-device-width: 1080px), (width <= 1080px) {
+  .header-nav.active {
+    height: auto;
+  }
+}
+
+/* `.content { overflow: hidden }` clips wide tables on narrow screens with no way to scroll.
+ * Narrow screens only: on desktop the homepage's `100vw` events strip would show a
+ * horizontal scrollbar under it. */
+@media (max-device-width: 768px), (width <= 768px) {
+  .content {
+    overflow-x: auto;
+  }
+}
+
+/* `.page-container * { font-size: 1rem }` flattens headings; restore the
+ * small-screen scale from base/typography.css. */
+@media (max-device-width: 768px), (width <= 768px) {
+  .page-container h1 { font-size: 2.1rem; }
+  .page-container h2 { font-size: 1.5rem; }
+  .page-container h3 { font-size: 1.4rem; }
+  .page-container h4 { font-size: 1.25rem; }
+  .page-container h5 { font-size: 1.125rem; }
+  .page-container h6 { font-size: 1.1rem; }
+}
