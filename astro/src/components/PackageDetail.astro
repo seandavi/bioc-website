@@ -27,6 +27,16 @@ const revFields = [
 const vignettes = asArray(pkg.vignettes);
 const vignetteTitles = asArray(pkg.vignetteTitles);
 const hasDeps = depFields.some(([, l]) => asArray(l).length > 0);
+// Build reports exist for software, experiment data and workflows, not for
+// annotation packages (verified: /checkResults/<ver>/data-annotation-LATEST/<pkg>/
+// is a 404 for every package). r-universe builds the same three kinds, but only
+// the current release (bioc-release) and devel (bioc) universes exist; the newest
+// version present is devel and its predecessor the release, as in the slug page.
+import { versions } from '../lib/packages.js';
+const [devel, release] = versions().reverse();
+const universe = { [devel]: 'bioc', [release]: 'bioc-release' }[version];
+const hasBuildReport = repo !== 'data/annotation';
+const buildReport = `https://bioconductor.org/checkResults/${version}/${repo.replace('/', '-')}-LATEST/${name}/`;
 // Same rows and labels as the legacy page's Package Archives table. Each path
 // names a file in the repository's own PACKAGES index (pipeline/packages.py
 // apply_downloads), so the link text is the real filename, version included.
@@ -82,6 +92,12 @@ BiocManager::install("${name}")`}</code></pre>
     {pkg.PackageStatus && <tr><td>Status</td><td>{pkg.PackageStatus}</td></tr>}
     {pkg.Rank && <tr><td>Downloads rank</td><td>{pkg.Rank}</td></tr>}
     {pkg.git_branch && <tr><td>Source branch</td><td>{pkg.git_branch}</td></tr>}
+    {hasBuildReport && (
+      <tr>
+        <td>Build report</td>
+        <td><a href={buildReport}>Bioconductor build system</a>{universe && <>, <a href={`https://${universe}.r-universe.dev/${name}`}>r-universe</a></>}</td>
+      </tr>
+    )}
     {pkg.biocViews && (
       <tr><td>biocViews</td><td>{asArray(pkg.biocViews).join(', ')}</td></tr>
     )}
