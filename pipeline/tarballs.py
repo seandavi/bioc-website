@@ -140,9 +140,10 @@ def to_record(dcf, branch):
         if k in DROP:
             continue
         rec[k] = net.split_list(v) if k in ARRAY_FIELDS else re.sub(r"\s+", " ", v).strip()
-    packaged = net.packaged_date(rec.pop("Packaged", None))
-    if packaged:
-        rec["Packaged"] = packaged
+    # `Updated`: the tarball's DESCRIPTION `Packaged` (Bioconductor's build date).
+    updated = net.packaged_date(rec.pop("Packaged", None))
+    if updated:
+        rec["Updated"] = updated
     rec["git_branch"] = branch
     if rec.get("Version"):
         rec["source.ver"] = "src/contrib/%s_%s.tar.gz" % (rec["Package"], rec["Version"])

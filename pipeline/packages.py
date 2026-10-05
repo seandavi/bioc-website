@@ -130,8 +130,11 @@ def from_runiverse(universe, branch):
                 rec[k] = re.sub(r"\s+", " ", str(p[k])).strip()
         if p.get("biocViews"):
             rec["biocViews"] = split_list(p["biocViews"])
-        if packaged := net.packaged_date(p.get("Packaged")):
-            rec["Packaged"] = packaged
+        # r-universe's own `Packaged` dates its rebuild (weeks to months after
+        # Bioconductor's build), so use the date of the commit it built. Within
+        # ~2 days before the tarball's `Packaged`.
+        if updated := net.commit_date((p.get("_commit") or {}).get("time")):
+            rec["Updated"] = updated
         rec["git_branch"] = branch
         if p.get("Version"):
             rec["source.ver"] = f"src/contrib/{name}_{p['Version']}.tar.gz"
@@ -156,9 +159,9 @@ def from_views(version, repo, branch):
             if k in UNUSED:
                 continue
             rec[k] = split_list(v) if k in ARRAY_FIELDS else v
-        packaged = net.packaged_date(rec.pop("Packaged", None))
-        if packaged:
-            rec["Packaged"] = packaged
+        updated = net.packaged_date(rec.pop("Packaged", None))
+        if updated:
+            rec["Updated"] = updated
         for k in ("hasNEWS", "hasREADME", "hasINSTALL", "hasLICENSE"):
             if k in rec:
                 rec[k] = str(rec[k]).strip().upper() == "TRUE"
@@ -225,8 +228,8 @@ def apply_downloads(pkgs, idx, rver):
         else:
             if rec.get("Version") and rec["Version"] != src:
                 corrected[name] = rec["Version"]
-                # Packaged dates the origin's build, not the version shown.
-                rec.pop("Packaged", None)
+                # Updated dates the origin's build, not the version shown.
+                rec.pop("Updated", None)
             rec["Version"] = src
             rec["source.ver"] = f"src/contrib/{name}_{src}.tar.gz"
         for field, (d, ext) in dirs.items():
@@ -364,11 +367,12 @@ def main(argv=None):
               f"corrected, {len(unserved)} not in the repository", file=sys.stderr)
 
     # First release and release list per package, from the releases already on
-    # disk. Without the 2.5 data "first seen" is meaningless, so both fields are
-    # left out, loudly.
+    # disk. If any release from 2.5 up to this one is missing, "first seen" and
+    # the list are wrong, so both fields are left out, loudly.
     first, seen, where = since.history(args.out, before=args.bioc)
-    if args.bioc != since.EARLIEST and since.EARLIEST not in seen:
-        print(f"  ! no {since.EARLIEST} data in {args.out}: 'since' and 'releases' omitted", file=sys.stderr)
+    if gaps := since.missing(seen, cfg, args.bioc):
+        print(f"  ! no data in {args.out} for releases {', '.join(gaps)}: 'since' and 'releases' omitted",
+              file=sys.stderr)
         first = None
     else:
         records = {v: since.record(v, cfg) for v in set(first.values()) | {args.bioc}}

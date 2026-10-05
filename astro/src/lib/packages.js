@@ -76,8 +76,8 @@ export function sinceLabel({ release, r, date, orEarlier }, now = new Date()) {
   let label = `BioC ${release}${orEarlier ? ' or earlier' : ''} (R-${r})`;
   if (date) {
     const d = new Date(date);
-    let years = now.getFullYear() - d.getFullYear();
-    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) years--;
+    let years = now.getUTCFullYear() - d.getUTCFullYear();
+    if (now.getUTCMonth() < d.getUTCMonth() || (now.getUTCMonth() === d.getUTCMonth() && now.getUTCDate() < d.getUTCDate())) years--;
     label += years < 1 ? ' (less than a year)' : ` (${years} ${years === 1 ? 'year' : 'years'})`;
   }
   return label;

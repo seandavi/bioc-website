@@ -22,9 +22,10 @@ def version_key(v):
 def history(data_dir, before):
     """({package: first release}, releases older than `before`, {package: {release: repo}}).
 
-    The repo map covers every release on disk except `before` itself (devel is
-    newer than a release being rebuilt), so the version switcher sees it too."""
-    first, where = {}, {}
+    A release counts as on disk only if some repo's packages.json in it is
+    non-empty. The repo map covers every release on disk except `before` itself
+    (devel is newer than a release being rebuilt), so the version switcher sees it too."""
+    first, where, populated = {}, {}, set()
     versions = sorted((d for d in os.listdir(data_dir)
                        if re.fullmatch(r"\d+\.\d+", d) and d != before), key=version_key)
     for v in versions:
@@ -33,10 +34,21 @@ def history(data_dir, before):
             if os.path.exists(f):
                 with open(f, encoding="utf-8") as fh:
                     for name in json.load(fh):
+                        populated.add(v)
                         where.setdefault(name, {})[v] = repo
                         if version_key(v) < version_key(before):
                             first.setdefault(name, v)
-    return first, [v for v in versions if version_key(v) < version_key(before)], where
+    return first, [v for v in versions if v in populated and version_key(v) < version_key(before)], where
+
+
+def missing(seen, cfg, before):
+    """Releases in config.yaml from EARLIEST up to `before` that are not in `seen`.
+
+    "First seen" and the releases list are only right if no release in between
+    is absent from disk."""
+    return sorted((v for v in (cfg.get("r_ver_for_bioc_ver") or {})
+                   if version_key(EARLIEST) <= version_key(v) < version_key(before) and v not in seen),
+                  key=version_key)
 
 
 def releases(where, version, repo):

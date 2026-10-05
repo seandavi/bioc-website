@@ -5,9 +5,7 @@
  * style/pages/packages.css applies: `<details>` + `summary.package-details`
  * for the collapsible sections, and a details table for the metadata.
  */
-import { depName, asArray } from '../lib/packages.js';
-
-import { sinceLabel } from '../lib/packages.js';
+import { depName, asArray, sinceLabel } from '../lib/packages.js';
 
 // `indexed` marks this page for the build-time Pagefind index (release pages
 // only: indexing devel too would put near-duplicates in every result list).
@@ -81,7 +79,7 @@ BiocManager::install("${name}")`}</code></pre>
     {pkg.URL && <tr><td>URL</td><td><a href={pkg.URL}>{pkg.URL}</a></td></tr>}
     {pkg.BugReports && <tr><td>Bug Reports</td><td><a href={pkg.BugReports}>{pkg.BugReports}</a></td></tr>}
     {pkg.SystemRequirements && <tr><td>System Requirements</td><td>{pkg.SystemRequirements}</td></tr>}
-    {pkg.Packaged && <tr><td>Last updated</td><td>{pkg.Packaged}</td></tr>}
+    {pkg.Updated && <tr><td>Last updated</td><td>{pkg.Updated}</td></tr>}
     {pkg.since && <tr><td>In Bioconductor since</td><td>{sinceLabel(pkg.since)}</td></tr>}
     {pkg.PackageStatus && <tr><td>Status</td><td>{pkg.PackageStatus}</td></tr>}
     {pkg.Rank && <tr><td>Downloads rank</td><td>{pkg.Rank}</td></tr>}

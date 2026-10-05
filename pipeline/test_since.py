@@ -3,10 +3,11 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 
-from pipeline.net import packaged_date
-from pipeline.packages import apply_downloads
-from pipeline.since import history, record, releases
+from pipeline.net import commit_date, packaged_date
+from pipeline.packages import apply_downloads, from_runiverse
+from pipeline.since import history, missing, record, releases
 from pipeline.tarballs import to_record
 
 CFG = {
@@ -39,6 +40,29 @@ class History(unittest.TestCase):
         self.assertEqual(where["m"], {"3.9": "bioc", "3.10": "data/annotation"})
         self.assertEqual(where["a"], {"3.9": "bioc", "3.12": "workflows"})
         self.assertEqual(first, {"a": "3.9", "m": "3.9"})  # 3.12 is newer: no effect on "first"
+
+
+class Missing(unittest.TestCase):
+    CFG = {"r_ver_for_bioc_ver": {v: "x" for v in ("1.6", "2.5", "2.6", "3.0", "3.10", "3.11", "3.12")}}
+
+    def test_every_config_release_from_2_5_up_to_before_must_be_on_disk(self):
+        self.assertEqual(missing(["2.5", "3.0", "3.11"], self.CFG, "3.12"), ["2.6", "3.10"])
+        self.assertEqual(missing(["2.5", "2.6", "3.0", "3.10", "3.11"], self.CFG, "3.12"), [])
+
+    def test_no_2_5_is_a_gap_and_older_or_newer_releases_are_not(self):
+        self.assertEqual(missing(["3.0", "3.10"], self.CFG, "3.11"), ["2.5", "2.6"])
+        self.assertEqual(missing([], self.CFG, "2.5"), [])
+
+    def test_a_release_dir_without_packages_is_not_on_disk(self):
+        with tempfile.TemporaryDirectory() as d:
+            for version, names in {"2.5": ["a"], "2.6": [], "3.0": ["a"]}.items():
+                os.makedirs(f"{d}/{version}/bioc")
+                with open(f"{d}/{version}/bioc/packages.json", "w") as fh:
+                    json.dump({n: {} for n in names}, fh)
+            os.makedirs(f"{d}/3.1")  # no packages.json at all
+            _, seen, _ = history(d, before="3.2")
+        self.assertEqual(seen, ["2.5", "3.0"])
+        self.assertEqual(missing(seen, self.CFG, "3.10"), ["2.6"])
 
 
 class Releases(unittest.TestCase):
@@ -83,19 +107,34 @@ class Packaged(unittest.TestCase):
         self.assertIsNone(packaged_date(None))
         self.assertIsNone(packaged_date("yesterday"))
 
-    def test_tarball_record_carries_packaged_as_a_date(self):
+    def test_commit_time_becomes_a_utc_date(self):
+        self.assertEqual(commit_date(1786233599), "2026-08-08")  # 23:59:59 UTC
+        self.assertEqual(commit_date(1786233600), "2026-08-09")  # 00:00:00 UTC
+        self.assertIsNone(commit_date(None))
+
+    def test_tarball_record_carries_packaged_as_updated(self):
         dcf = {"Package": "x", "Version": "1.0", "Packaged": "2026-09-29 07:42:20 UTC; biocbuild"}
-        self.assertEqual(to_record(dcf, "devel")["Packaged"], "2026-09-29")
-        self.assertNotIn("Packaged", to_record({"Package": "x", "Version": "1.0"}, "devel"))
+        rec = to_record(dcf, "devel")
+        self.assertEqual(rec["Updated"], "2026-09-29")
+        self.assertNotIn("Packaged", rec)
+        self.assertNotIn("Updated", to_record({"Package": "x", "Version": "1.0"}, "devel"))
+
+    def test_runiverse_record_is_dated_by_its_commit_not_its_rebuild(self):
+        pkg = {"Package": "limma", "Version": "3.68.5", "Packaged": {"Date": "2026-09-09 01:00:00 UTC"},
+               "_commit": {"time": 1786233600}}
+        with mock.patch("pipeline.packages.fetch", return_value=json.dumps([pkg])):
+            rec = from_runiverse("bioc-release", "RELEASE_3_23")["limma"]
+        self.assertEqual(rec["Updated"], "2026-08-09")
+        self.assertNotIn("Packaged", rec)
 
     def test_dropped_when_the_version_shown_is_not_the_one_it_dates(self):
         idx = {"source.ver": {"CelliD": "1.19.0", "limma": "3.68.5"}, "win.binary.ver": {},
                "mac.binary.sonoma-arm64.ver": {}, "mac.binary.big-sur-x86_64.ver": {}}
-        pkgs = {"CelliD": {"Version": "1.20.0", "Packaged": "2026-09-29"},
-                "limma": {"Version": "3.68.5", "Packaged": "2026-09-29"}}
+        pkgs = {"CelliD": {"Version": "1.20.0", "Updated": "2026-09-29"},
+                "limma": {"Version": "3.68.5", "Updated": "2026-09-29"}}
         apply_downloads(pkgs, idx, "4.6")
-        self.assertNotIn("Packaged", pkgs["CelliD"])
-        self.assertEqual(pkgs["limma"]["Packaged"], "2026-09-29")
+        self.assertNotIn("Updated", pkgs["CelliD"])
+        self.assertEqual(pkgs["limma"]["Updated"], "2026-09-29")
 
 
 if __name__ == "__main__":

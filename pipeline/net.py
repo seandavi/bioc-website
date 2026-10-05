@@ -7,6 +7,7 @@ than five slightly different ones.
 """
 
 import concurrent.futures
+import datetime
 import re
 import sys
 import time
@@ -89,6 +90,13 @@ def parse_dcf(text):
 def split_list(v):
     """A comma-separated DESCRIPTION field -> list, preserving version constraints."""
     return [x.strip() for x in re.split(r",\s*", v) if x.strip()] if v else []
+
+
+def commit_date(unix_seconds):
+    """r-universe's `_commit.time` -> 'YYYY-MM-DD' (UTC), or None."""
+    if not unix_seconds:
+        return None
+    return datetime.datetime.fromtimestamp(unix_seconds, datetime.timezone.utc).strftime("%Y-%m-%d")
 
 
 def packaged_date(value):
