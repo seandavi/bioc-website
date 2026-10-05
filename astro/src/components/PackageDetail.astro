@@ -42,6 +42,7 @@ const repoLabels = {
   'bioc': 'Software', 'data/annotation': 'Annotation',
   'data/experiment': 'Experiment Data', 'workflows': 'Workflow',
 };
+import CopyButtons from './CopyButtons.astro';
 ---
 <ul class="breadcrumbs">
   <li><a href="/">Home</a></li>
@@ -64,6 +65,7 @@ const repoLabels = {
   {pkg.Description && <p class="description">{pkg.Description}</p>}
 </div>
 
+<CopyButtons />
 <h2>Installation</h2>
 <pre><code>{`if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
