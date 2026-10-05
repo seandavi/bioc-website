@@ -29,7 +29,9 @@ const allowed = [
 const denied = [
   '/checkResults/',
   '/help/search/?search-bar=x',
-  '/packages/1.8/bioc/html/DESeq2.html',
+  // Numbered releases must stay blocked whatever data the build had on disk:
+  // CI's snapshot holds only 3.23 and 3.24, so these are NOT in it.
+  ...['1.8', '1.9', '2.0', '2.5', '2.14', '3.0', '3.9', '3.10', '3.22'].map((v) => `/packages/${v}/bioc/html/DESeq2.html`),
   '/packages/3.23/bioc/html/DESeq2.html',
   '/packages/3.24/bioc/html/DESeq2.html',
   '/packages/release/bioc/src/contrib/DESeq2_1.52.0.tar.gz',
