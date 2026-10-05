@@ -68,3 +68,17 @@ export function loadTree(version) {
   if (!existsSync(f)) return null;
   return JSON.parse(readFileSync(f, 'utf8'));
 }
+
+// "BioC 2.14 (R-3.1) (12 years)" from a record's `since` field (pipeline/since.py).
+// Whole years since the release date, counted at build time; a release with no
+// date (devel) gets none.
+export function sinceLabel({ release, r, date, orEarlier }, now = new Date()) {
+  let label = `BioC ${release}${orEarlier ? ' or earlier' : ''} (R-${r})`;
+  if (date) {
+    const d = new Date(date);
+    let years = now.getFullYear() - d.getFullYear();
+    if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) years--;
+    label += years < 1 ? ' (less than a year)' : ` (${years} ${years === 1 ? 'year' : 'years'})`;
+  }
+  return label;
+}

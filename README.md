@@ -95,6 +95,10 @@ Concretely (`.github/workflows/site.yml`):
     | rclone rcat r2:bioc-site/_ci/site-data.tar.zst
   ```
 
+  The refresh needs the full release history under `astro/data/` (see below):
+  `since` ("In Bioconductor since") is computed from the releases on disk and
+  is left out, with a warning, when `2.5` is not among them.
+
   Scheduling that refresh is [#5](https://github.com/seandavi/bioconductor-website/issues/5).
   The full 35-release data — including the frozen 2.5–3.22 snapshot, which is
   **not regenerable from any live source** — lives at

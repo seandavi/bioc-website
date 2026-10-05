@@ -91,6 +91,17 @@ def split_list(v):
     return [x.strip() for x in re.split(r",\s*", v) if x.strip()] if v else []
 
 
+def packaged_date(value):
+    """DESCRIPTION's `Packaged` -> 'YYYY-MM-DD', or None.
+
+    A tarball carries the field as text ('2026-09-29 07:42:20 UTC; biocbuild');
+    r-universe parses it into {'Date': '2026-09-29 07:42:20 UTC', 'User': ...}."""
+    if isinstance(value, dict):
+        value = value.get("Date")
+    m = re.match(r"\d{4}-\d{2}-\d{2}", str(value or ""))
+    return m.group(0) if m else None
+
+
 def dep_name(entry):
     """'R (>= 3.6.0)' -> 'R'."""
     return re.split(r"[ (]", str(entry))[0]

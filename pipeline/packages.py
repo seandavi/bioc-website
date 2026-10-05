@@ -36,7 +36,7 @@ Usage:
 
 import argparse, collections, json, os, re, sys, urllib.request
 
-from . import net, tarballs
+from . import net, since, tarballs
 
 UA = {"User-Agent": "Mozilla/5.0 bioc-website/packages-json-generator"}
 SITE = "https://bioconductor.org"
@@ -130,6 +130,8 @@ def from_runiverse(universe, branch):
                 rec[k] = re.sub(r"\s+", " ", str(p[k])).strip()
         if p.get("biocViews"):
             rec["biocViews"] = split_list(p["biocViews"])
+        if packaged := net.packaged_date(p.get("Packaged")):
+            rec["Packaged"] = packaged
         rec["git_branch"] = branch
         if p.get("Version"):
             rec["source.ver"] = f"src/contrib/{name}_{p['Version']}.tar.gz"
@@ -154,6 +156,9 @@ def from_views(version, repo, branch):
             if k in UNUSED:
                 continue
             rec[k] = split_list(v) if k in ARRAY_FIELDS else v
+        packaged = net.packaged_date(rec.pop("Packaged", None))
+        if packaged:
+            rec["Packaged"] = packaged
         for k in ("hasNEWS", "hasREADME", "hasINSTALL", "hasLICENSE"):
             if k in rec:
                 rec[k] = str(rec[k]).strip().upper() == "TRUE"
@@ -220,6 +225,8 @@ def apply_downloads(pkgs, idx, rver):
         else:
             if rec.get("Version") and rec["Version"] != src:
                 corrected[name] = rec["Version"]
+                # Packaged dates the origin's build, not the version shown.
+                rec.pop("Packaged", None)
             rec["Version"] = src
             rec["source.ver"] = f"src/contrib/{name}_{src}.tar.gz"
         for field, (d, ext) in dirs.items():
@@ -356,6 +363,15 @@ def main(argv=None):
         print(f"[{repo}] downloads from the repository's PACKAGES: {len(corrected)} versions "
               f"corrected, {len(unserved)} not in the repository", file=sys.stderr)
 
+    # First release per package, from the releases already on disk. Without the
+    # 2.5 data "first seen" is meaningless, so the field is left out, loudly.
+    first, seen = since.history(args.out, before=args.bioc)
+    if args.bioc != since.EARLIEST and since.EARLIEST not in seen:
+        print(f"  ! no {since.EARLIEST} data in {args.out}: 'since' omitted", file=sys.stderr)
+        first = None
+    else:
+        records = {v: since.record(v, cfg) for v in set(first.values()) | {args.bioc}}
+
     total = 0
     for repo, pkgs in repos.items():
         ranks = load_ranks(repo, args.bioc)
@@ -370,6 +386,8 @@ def main(argv=None):
             root = ROOT_TERM.get(repo)
             if root:
                 rec["biocViews"] = sorted(set(rec.get("biocViews", [])) | {root})
+            if first is not None:
+                rec["since"] = records[first.get(name, args.bioc)]
             rec["dependencyCount"] = str(len({
                 dep_name(d) for role in ("Depends", "Imports", "LinkingTo")
                 for d in rec.get(role, []) if dep_name(d) != "R"
@@ -391,7 +409,8 @@ def main(argv=None):
     # Provenance is written next to the data, not just printed. A build that
     # silently fell back to a circular source must be detectable afterwards.
     meta = {"bioc_version": args.bioc, "branch": branch, "origins": provenance,
-            "tarball_reports": tarball_reports, "r_version": rver, "downloads": downloads}
+            "tarball_reports": tarball_reports, "r_version": rver, "downloads": downloads,
+            "since": "omitted: no history" if first is None else "computed"}
     with open(os.path.join(args.out, args.bioc, "provenance.json"), "w") as fh:
         json.dump(meta, fh, indent=1)
 
