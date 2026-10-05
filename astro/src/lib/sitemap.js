@@ -14,26 +14,35 @@ const redirected = (url) =>
   url === '/developers/package-end-of-life/' ||
   url === '/developers/package-submission/';
 
+// Not content: error pages, the nanoc example/template files (checked
+// 2026-10-05: 'Example Index File', 'Access Forbidden', 'Page Not Found', and
+// the 3.18 release-announcement template).
+const junk = new Set(['/help/403/', '/help/404/', '/examples/', '/examples/markdown/', '/news/template/']);
+
 // Canonical URLs only: the /release/ and /devel/ aliases (never the numbered
 // versions, which carry canonicals pointing here), and nothing robots.txt
-// disallows. Grouped so each group shards independently.
+// disallows. Devel pages are near-duplicates of release pages and equally
+// self-canonical, so devel lists only packages with no release page, and no
+// devel index pages. Grouped so each group shards independently.
 function groups() {
   const { release, devel } = liveVersions();
   const g = {
     // The renderable prose set of [...page].astro, minus the search page it
     // skips and robots.txt disallows, and minus URLs the Worker redirects.
     pages: loadPages()
-      .filter((p) => p.renderable && p.url !== '/help/search/' && !redirected(p.url))
+      .filter((p) => p.renderable && p.url !== '/help/search/' && !redirected(p.url) && !junk.has(p.url))
       .map((p) => p.url),
     release: [],
     devel: [],
   };
+  const releaseRepos = Object.fromEntries(reposFor(release).map((repo) => [repo, loadRepo(release, repo)]));
   for (const [channel, version] of [['release', release], ['devel', devel]]) {
     const base = `/packages/${channel}`;
-    g[channel].push(`${base}/BiocViews.html`);
+    if (channel === 'release') g[channel].push(`${base}/BiocViews.html`);
     for (const repo of reposFor(version)) {
-      g[channel].push(`${base}/${repo}/`);
+      if (channel === 'release') g[channel].push(`${base}/${repo}/`);
       for (const [name, pkg] of Object.entries(loadRepo(version, repo))) {
+        if (channel === 'devel' && releaseRepos[repo]?.[name]) continue;
         g[channel].push(`${base}/${repo}/html/${name}.html`);
         // Release vignettes answer the "how do I ..." queries; the data has
         // no dates, so no <lastmod>.
