@@ -16,6 +16,11 @@ footer a {
   text-decoration: underline;
 }
 
+/* The column headings are `<a><h3>…</h3></a>`; keep them plain. */
+footer a:has(> h3) {
+  text-decoration: none;
+}
+
 /* Mobile nav drawer (<= 1080px). Upstream's `.header-nav.active { height: 21rem }`
  * plus `overflow: hidden` clips the search box and Get Started button. */
 @media (max-device-width: 1080px), (width <= 1080px) {
@@ -24,9 +29,13 @@ footer a {
   }
 }
 
-/* `.content { overflow: hidden }` clips wide tables on narrow screens with no way to scroll. */
-.content {
-  overflow-x: auto;
+/* `.content { overflow: hidden }` clips wide tables on narrow screens with no way to scroll.
+ * Narrow screens only: on desktop the homepage's `100vw` events strip would show a
+ * horizontal scrollbar under it. */
+@media (max-device-width: 768px), (width <= 768px) {
+  .content {
+    overflow-x: auto;
+  }
 }
 
 /* `.page-container * { font-size: 1rem }` flattens headings; restore the
