@@ -1,5 +1,6 @@
 """python3 -m unittest discover -s pipeline -p 'test_*.py'"""
 import unittest
+from pipeline import packages
 
 from pipeline.packages import apply_downloads, bin_dirs, rank_by_score
 
@@ -7,6 +8,19 @@ from pipeline.packages import apply_downloads, bin_dirs, rank_by_score
 def index(src, win=None, arm=None, x86=None):
     return {"source.ver": src, "win.binary.ver": win or {},
             "mac.binary.sonoma-arm64.ver": arm or {}, "mac.binary.big-sur-x86_64.ver": x86 or {}}
+
+
+class SoftwareOnly(unittest.TestCase):
+    def test_drops_packages_that_belong_to_another_repository(self):
+        # ALL is an experiment-data package, TCGAWorkflow an unserved workflow
+        # (named by the workflows repository's VIEWS, absent from its PACKAGES).
+        bioc = {"limma": {}, "ALL": {}, "TCGAWorkflow": {}}
+        others = [{"org.Hs.eg.db"}, {"ALL"}, {"TCGAWorkflow"}]
+        self.assertEqual(sorted(packages.software_only(bioc, others)), ["limma"])
+
+    def test_keeps_unserved_software_absent_from_every_set(self):
+        self.assertEqual(sorted(packages.software_only({"limma": {}, "BPRMeth": {}}, [{"ALL"}, set(), set()])),
+                         ["BPRMeth", "limma"])
 
 
 class ApplyDownloads(unittest.TestCase):

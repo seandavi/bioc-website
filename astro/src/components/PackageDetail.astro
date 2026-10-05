@@ -49,6 +49,12 @@ import { releasesOfPackage } from '../lib/packages.js';
 const releases = releasesOfPackage(name, pkg);
 const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
 
+import PackageCitation from './PackageCitation.astro';
+
+// Same DOI on every page kind: it is minted per package name and always
+// redirects to the current release (devel if the package isn't released yet).
+const doi = `10.18129/B9.bioc.${name}`;
+
 const repoLabels = {
   'bioc': 'Software', 'data/annotation': 'Annotation',
   'data/experiment': 'Experiment Data', 'workflows': 'Workflow',
@@ -94,6 +100,10 @@ import CopyButtons from './CopyButtons.astro';
   )}
 
   {pkg.Description && <p class="description">{pkg.Description}</p>}
+
+  <p class="doi" data-pagefind-ignore>
+    DOI: <a title="DOI for use in publications, etc., will always redirect to current release version (or devel if package is not in release yet)." href={`https://doi.org/${doi}`}>{doi}</a>
+  </p>
 </div>
 
 <CopyButtons />
@@ -124,8 +134,15 @@ BiocManager::install("${name}")`}</code></pre>
     {pkg.biocViews && (
       <tr><td>biocViews</td><td>{asArray(pkg.biocViews).join(', ')}</td></tr>
     )}
+    <tr>
+      <td>Package Short Url</td>
+      <!-- Text, not a link: it is a Worker redirect, so no file in dist backs it. -->
+      <td title={`For citation in publications, etc., please use DOI: ${doi}`}>https://bioconductor.org/packages/{name}/</td>
+    </tr>
   </tbody>
 </table>
+
+<PackageCitation pkg={pkg} name={name} version={version} repo={repo} doi={doi} />
 
 {vignettes.length > 0 && (
   <>
