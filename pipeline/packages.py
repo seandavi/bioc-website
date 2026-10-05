@@ -150,6 +150,18 @@ def from_runiverse(universe, branch):
     return out
 
 
+def software_only(bioc, others):
+    """The universes also hold experiment-data and workflow packages, which
+    Bioconductor publishes in other repositories; a package belongs to exactly
+    one repository, so r-universe records named in any other repository's set
+    are not software. Packages that failed to build this cycle are in no
+    PACKAGES index but are still kept (their landing pages must exist), unless
+    another repository lists them: unserved workflows and data packages appear
+    in that repository's VIEWS only, so `others` must include those names."""
+    taken = set().union(*others)
+    return {name: rec for name, rec in bioc.items() if name not in taken}
+
+
 def from_views(version, repo, branch):
     """Fallback for repositories with no origin outside the site yet."""
     dcf = parse_dcf(fetch(f"{SITE}/packages/{version}/{repo}/VIEWS"))
@@ -355,6 +367,10 @@ def main(argv=None):
             print(f"[{repo}] origin: VIEWS  ({why})", file=sys.stderr)
             repos[repo] = from_views(args.bioc, repo, branch)
             provenance[repo] = "VIEWS (circular)"
+
+    if args.software_origin == "runiverse":
+        repos["bioc"] = software_only(
+            repos["bioc"], [set(repos[r]) | set(from_views(args.bioc, r, branch)) for r in REPOS[1:]])
 
     # Reverse dependencies span every repository AND CRAN — a Bioconductor page
     # lists CRAN packages that depend on it. So the graph is built from all four
