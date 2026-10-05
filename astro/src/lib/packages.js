@@ -100,6 +100,13 @@ export function loadTree(version) {
   return JSON.parse(readFileSync(f, 'utf8'));
 }
 
+// The newest version present is devel and its predecessor the release (the
+// Worker serves them at /packages/devel/ and /packages/release/).
+export function liveVersions() {
+  const vs = versions();
+  return { release: vs.at(-2), devel: vs.at(-1) };
+}
+
 // "BioC 2.14 (R-3.1) (12 years)" from a record's `since` field (pipeline/since.py).
 // Whole years since the release date, counted at build time; a release with no
 // date (devel) gets none.

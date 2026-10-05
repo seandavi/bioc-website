@@ -62,6 +62,10 @@ jobs:
         run: node check-canonical.mjs
         working-directory: astro
 
+      - name: Sitemap
+        run: node check-sitemap.mjs
+        working-directory: astro
+
       - name: Publish preview
         if: github.event_name == 'pull_request'
         # Second pass only re-touches what the first left behind: sync is
