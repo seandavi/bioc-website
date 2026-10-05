@@ -1,7 +1,8 @@
 """python3 -m unittest discover -s pipeline -p 'test_*.py'"""
 import unittest
+from pipeline import packages
 
-from pipeline.packages import apply_downloads, bin_dirs, software_only
+from pipeline.packages import apply_downloads, bin_dirs
 
 
 def index(src, win=None, arm=None, x86=None):
@@ -15,10 +16,10 @@ class SoftwareOnly(unittest.TestCase):
         # (named by the workflows repository's VIEWS, absent from its PACKAGES).
         bioc = {"limma": {}, "ALL": {}, "TCGAWorkflow": {}}
         others = [{"org.Hs.eg.db"}, {"ALL"}, {"TCGAWorkflow"}]
-        self.assertEqual(sorted(software_only(bioc, others)), ["limma"])
+        self.assertEqual(sorted(packages.software_only(bioc, others)), ["limma"])
 
     def test_keeps_unserved_software_absent_from_every_set(self):
-        self.assertEqual(sorted(software_only({"limma": {}, "BPRMeth": {}}, [{"ALL"}, set(), set()])),
+        self.assertEqual(sorted(packages.software_only({"limma": {}, "BPRMeth": {}}, [{"ALL"}, set(), set()])),
                          ["BPRMeth", "limma"])
 
 
