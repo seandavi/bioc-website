@@ -68,3 +68,10 @@ export function loadTree(version) {
   if (!existsSync(f)) return null;
   return JSON.parse(readFileSync(f, 'utf8'));
 }
+
+// The newest version present is devel and its predecessor the release (the
+// Worker serves them at /packages/devel/ and /packages/release/).
+export function liveVersions() {
+  const vs = versions();
+  return { release: vs.at(-2), devel: vs.at(-1) };
+}
