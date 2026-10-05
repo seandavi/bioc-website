@@ -68,3 +68,25 @@ export function loadTree(version) {
   if (!existsSync(f)) return null;
   return JSON.parse(readFileSync(f, 'utf8'));
 }
+
+// package name -> [{ version, repo, channel }], newest release first, over
+// every release that ships it, so a package page can link to its siblings and
+// every link resolves. `channel` is 'devel' for the newest release present and
+// 'release' for its predecessor (as in pages/packages/[...slug].astro).
+let releasesOf;
+export function releasesOfPackage(name) {
+  if (!releasesOf) {
+    releasesOf = new Map();
+    const all = versions().reverse();
+    all.forEach((version, i) => {
+      const channel = i === 0 ? 'devel' : i === 1 ? 'release' : null;
+      for (const repo of reposFor(version)) {
+        for (const n of Object.keys(loadRepo(version, repo))) {
+          if (!releasesOf.has(n)) releasesOf.set(n, []);
+          releasesOf.get(n).push({ version, repo, channel });
+        }
+      }
+    });
+  }
+  return releasesOf.get(name) ?? [];
+}

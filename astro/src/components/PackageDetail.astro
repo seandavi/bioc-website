@@ -36,6 +36,9 @@ const downloads = [
   ['macOS binary (arm64)', pkg['mac.binary.sonoma-arm64.ver']],
   ['macOS binary (x86_64)', pkg['mac.binary.big-sur-x86_64.ver']],
 ].filter(([, path]) => path);
+import { releasesOfPackage } from '../lib/packages.js';
+// This package in every release that ships it. Plain links, so it works without JS.
+const releases = releasesOfPackage(name);
 const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
 
 const repoLabels = {
@@ -60,6 +63,22 @@ const repoLabels = {
   <p class="version" data-pagefind-ignore>
     Bioconductor version: {version} &middot; Package version: {pkg.Version}
   </p>
+
+  {releases.length > 1 && (
+    <details class="package-versions" data-pagefind-ignore>
+      <summary>Other Bioconductor versions</summary>
+      <p>
+        {releases.map((r, i) => (
+          <>
+            {i > 0 && ', '}
+            {r.version === version
+              ? <strong aria-current="page">{r.version}{r.channel && ` (${r.channel})`}</strong>
+              : <a href={`/packages/${r.version}/${r.repo}/html/${name}.html`}>{r.version}{r.channel && ` (${r.channel})`}</a>}
+          </>
+        ))}
+      </p>
+    </details>
+  )}
 
   {pkg.Description && <p class="description">{pkg.Description}</p>}
 </div>

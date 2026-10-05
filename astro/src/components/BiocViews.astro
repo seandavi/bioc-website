@@ -42,6 +42,11 @@ const repoOf = Object.fromEntries(Object.entries(pkgMap).map(([n, v]) => [n, v[0
 
 <h1>Bioconductor {version} Packages</h1>
 
+<p>
+  Looking for something older? See <a href="/about/release-announcements/">past releases</a>
+  or the <a href="/about/removed-packages/">packages removed from Bioconductor</a>.
+</p>
+
 <PackageFinder client:load {version} {channel} {other} {roots} pkgs={pkgMap} />
 
 <div id="bv-fallback">
