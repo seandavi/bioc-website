@@ -1,7 +1,7 @@
 """python3 -m unittest discover -s pipeline -p 'test_*.py'"""
 import unittest
 
-from pipeline.packages import apply_downloads, bin_dirs
+from pipeline.packages import apply_downloads, bin_dirs, rank_by_score
 
 
 def index(src, win=None, arm=None, x86=None):
@@ -50,3 +50,14 @@ class ApplyDownloads(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RankByScore(unittest.TestCase):
+    def test_most_downloaded_is_rank_one_and_ties_share_the_best_rank(self):
+        scores = {"a": 50, "b": 90, "c": 50, "d": 10}
+        self.assertEqual(rank_by_score(scores, ["a", "b", "c", "d"]),
+                         {"b": 1, "a": 2, "c": 2, "d": 4})
+
+    def test_unscored_package_ranks_last_and_removed_ones_take_no_place(self):
+        scores = {"a": 5, "gone": 99}
+        self.assertEqual(rank_by_score(scores, ["a", "new"]), {"a": 1, "new": 2})

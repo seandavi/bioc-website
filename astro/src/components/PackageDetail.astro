@@ -9,7 +9,7 @@ import { depName, asArray } from '../lib/packages.js';
 
 // `indexed` marks this page for the build-time Pagefind index (release pages
 // only: indexing devel too would put near-duplicates in every result list).
-const { pkg, name, version, repo, indexed = false } = Astro.props;
+const { pkg, name, version, repo, repoSize, indexed = false } = Astro.props;
 
 // Cross-repo links are not resolved: a dependency named here may live in any of
 // the four repositories or on CRAN, and guessing wrong produces a confident 404.
@@ -80,7 +80,7 @@ BiocManager::install("${name}")`}</code></pre>
     {pkg.BugReports && <tr><td>Bug Reports</td><td><a href={pkg.BugReports}>{pkg.BugReports}</a></td></tr>}
     {pkg.SystemRequirements && <tr><td>System Requirements</td><td>{pkg.SystemRequirements}</td></tr>}
     {pkg.PackageStatus && <tr><td>Status</td><td>{pkg.PackageStatus}</td></tr>}
-    {pkg.Rank && <tr><td>Downloads rank</td><td>{pkg.Rank}</td></tr>}
+    {pkg.DownloadRank && <tr><td>Downloads rank</td><td>{pkg.DownloadRank} of {repoSize.toLocaleString('en-US')}</td></tr>}
     {pkg.git_branch && <tr><td>Source branch</td><td>{pkg.git_branch}</td></tr>}
     {pkg.biocViews && (
       <tr><td>biocViews</td><td>{asArray(pkg.biocViews).join(', ')}</td></tr>
