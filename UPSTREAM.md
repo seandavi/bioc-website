@@ -34,3 +34,12 @@ Astro component or data file, and the upstream construct goes away.
 | 5 | `render('/_top_events/')` | homepage | Replaced with a slot filled from event data (`ERB_SLOTS`) | Events component |
 | 6 | Pages generated from package data | `content/help/bioc-views/` | Skipped (`GENERATED`); built by the Astro side | Already native |
 | 7 | Other ERB (helper calls, loops) | e.g. `developers/gitlog.md`, `help/publications.md` | Page flagged `erbUnresolved` and not rendered from the import | Port the page |
+
+## Stylesheet overrides
+
+`astro/public/style/` is copied from upstream unchanged, so CSS fixes live in
+`astro/src/styles/site-overrides.css`, loaded after it.
+
+| # | Upstream source | What goes wrong here | Override here | Upstream fix | Status |
+|---|---|---|---|---|---|
+| 8 | `assets/style/base/typography.css` (`a { color: black }`), `sections/footer.css` (`footer * { text-decoration: none }`) | Links in body text are the same colour as the text, and footer links have no underline ([#38](https://github.com/seandavi/bioc-website/issues/38), upstream [#399](https://github.com/Bioconductor/bioconductor.org/issues/399)). | `:where(.content) a` gets `--primary-p400`; `footer a` is underlined again. | Same two edits in those files. | open |
