@@ -11,6 +11,9 @@ import { depHref, asArray } from '../lib/packages.js';
 // only: indexing devel too would put near-duplicates in every result list).
 const { pkg, name, version, repo, indexed = false } = Astro.props;
 
+// [name, href] per dependency entry; href is null for base R.
+const depLinks = (list) => asArray(list).map((d) => [d, depHref(version, d)]);
+
 const depFields = [
   ['Depends', pkg.Depends], ['Imports', pkg.Imports], ['LinkingTo', pkg.LinkingTo],
   ['Suggests', pkg.Suggests], ['Enhances', pkg.Enhances],
@@ -116,8 +119,8 @@ BiocManager::install("${name}")`}</code></pre>
     {depFields.map(([label, list]) =>
       asArray(list).length > 0 && (
         <p class="deps"><strong>{label}:</strong>{' '}
-          {asArray(list).map((d, i) => (
-            <>{i > 0 && ', '}{depHref(version, d) ? <a href={depHref(version, d)}>{d}</a> : d}</>
+          {depLinks(list).map(([d, href], i) => (
+            <>{i > 0 && ', '}{href ? <a href={href}>{d}</a> : d}</>
           ))}
         </p>
       )
@@ -131,8 +134,8 @@ BiocManager::install("${name}")`}</code></pre>
     {revFields.map(([label, list]) =>
       asArray(list).length > 0 && (
         <p class="revdeps"><strong>{label}</strong> ({asArray(list).length}):{' '}
-          {asArray(list).map((d, i) => (
-            <>{i > 0 && ', '}{depHref(version, d, { cran: false }) ? <a href={depHref(version, d, { cran: false })}>{d}</a> : d}</>
+          {depLinks(list).map(([d, href], i) => (
+            <>{i > 0 && ', '}{href ? <a href={href}>{d}</a> : d}</>
           ))}
         </p>
       )

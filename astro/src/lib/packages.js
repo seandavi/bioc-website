@@ -64,15 +64,14 @@ function biocRepoOf(version, name) {
 }
 
 // Where a dependency entry points: its Bioconductor page in this release,
-// CRAN for anything else (`cran: false` for reverse dependencies, which are
-// Bioconductor packages, so a miss there has no page at all), or null when
-// there is nothing to link to.
-export function depHref(version, entry, { cran = true } = {}) {
+// CRAN for anything else (reverse dependencies include CRAN packages, which
+// pipeline/packages.py folds into the reverse graph), or null for base R.
+export function depHref(version, entry) {
   const name = depName(entry);
   if (BASE_R.has(name)) return null;
   const repo = biocRepoOf(version, name);
   if (repo) return `/packages/${version}/${repo}/html/${name}.html`;
-  return cran ? `https://cran.r-project.org/package=${name}` : null;
+  return `https://cran.r-project.org/package=${name}`;
 }
 
 export function asArray(v) {
