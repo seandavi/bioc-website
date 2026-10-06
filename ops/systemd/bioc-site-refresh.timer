@@ -1,0 +1,12 @@
+[Unit]
+Description=Every 20 minutes: rebuild bioconductor.org when Bioconductor/bioconductor.org devel moves
+
+[Timer]
+# Same cadence as the legacy staging cron this replaces; a run with no
+# upstream change is one git ls-remote.
+OnCalendar=*:0/20
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target
