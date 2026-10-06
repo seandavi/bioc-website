@@ -54,7 +54,7 @@ work; the legacy site never built check pages.
 ```mermaid
 flowchart LR
   pr["pull request"] -- "CI build" --> preview["R2: preview/pr-&lt;n&gt;/<br/>deleted on close"]
-  main["push to main"] -- "CI build" --> site["R2: site/&lt;sha&gt;/ (immutable)<br/>+ site/latest pointer"]
+  main["push to main<br/>or dispatch"] -- "CI build" --> site["R2: site/&lt;sha&gt;-&lt;data&gt;/ (immutable)<br/>+ site/latest pointer"]
   snapshot["R2: _ci/site-data.tar.zst<br/>data snapshot"] -. "pulled by CI<br/>instead of refetching sources" .-> pr & main
   worker["Cloudflare Worker<br/>(bioc-edge)"] --> preview & site
   worker --> legacy["mirrored legacy content<br/>(everything not yet ported)"]
@@ -75,8 +75,11 @@ Concretely (`.github/workflows/site.yml`):
   served `no-cache`. (Internal links are root-absolute and escape the preview
   onto the mirrored legacy site — subdomain previews are
   [#4](https://github.com/seandavi/bioconductor-website/issues/4).)
-- **Every push to `main`** publishes an immutable `site/<sha>/` build and
-  moves the `site/latest` pointer. Retention of old builds is
+- **Every push to `main`**, and every `workflow_dispatch`, publishes an
+  immutable `site/<sha>-<snapshot hash>/` build and moves the `site/latest`
+  pointer. The snapshot hash is part of the id because the Worker's edge
+  cache keys on it: a refreshed snapshot on the same commit must get a new id,
+  and re-running a build does not refresh cached pages. Retention of old builds is
   [#2](https://github.com/seandavi/bioconductor-website/issues/2).
 - **CI builds only the mutable surface** — prose pages, the live releases
   (currently 3.23 and 3.24), and `/next/`. The frozen releases (2.5–3.22) are
@@ -86,8 +89,19 @@ Concretely (`.github/workflows/site.yml`):
   snapshot, not a code path.
 - **Builds read a data snapshot**, not primary sources: CI pulls
   `_ci/site-data.tar.zst` (live releases' `astro/data/` plus the copied
-  `astro/public/` assets). Refresh it by running the pipeline locally and
-  re-uploading:
+  `astro/public/` assets).
+
+  **Prose and assets refresh automatically.** `ops/refresh-content.sh`, run
+  every 20 minutes by `ops/systemd/bioc-site-refresh.timer` on onclappc02,
+  checks Bioconductor/bioconductor.org `devel`. When it has moved, the script
+  regenerates `data/site` and `public/` on top of the current snapshot, uploads
+  the result, and dispatches `site.yml`. It keeps every snapshot it replaces
+  under `/data/davsean/bioc-site-refresh/snapshots`. To force a run, delete
+  `/data/davsean/bioc-site-refresh/upstream-head` and
+  `systemctl --user start bioc-site-refresh`.
+
+  **Package data (`data/<release>`) is refreshed by hand**: run the full
+  pipeline locally and re-upload:
 
   ```sh
   just data
@@ -99,7 +113,9 @@ Concretely (`.github/workflows/site.yml`):
   `since` ("In Bioconductor since") is computed from the releases on disk and
   is left out, with a warning, when `2.5` is not among them.
 
-  Scheduling that refresh is [#5](https://github.com/seandavi/bioconductor-website/issues/5).
+  Scheduling that refresh is [#5](https://github.com/seandavi/bioconductor-website/issues/5). How
+  site content should be managed and published in general is open for
+  discussion in [bioc-infrastructure#91](https://github.com/seandavi/bioc-infrastructure/issues/91).
   The full 35-release data — including the frozen 2.5–3.22 snapshot, which is
   **not regenerable from any live source** — lives at
   `_ci/site-data-full.tar.zst`; swap it in locally to rebuild an archival page
