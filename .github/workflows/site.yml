@@ -1,6 +1,7 @@
 # Build the site and publish it to R2.
 #
-#   push to main  -> s3://bioc-site/site/<sha>/     (immutable, pointer in site/latest)
+#   push to main  -> s3://bioc-site/site/<sha>-<data>/  (immutable, pointer in site/latest)
+#   dispatch      -> same, after ops/refresh-content.sh refreshes the snapshot
 #   pull request  -> s3://bioc-site/preview/pr-<n>/ (mutable, deleted on close)
 #
 # The Worker (private infra repo) decides what is actually served; this
@@ -12,6 +13,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # ops/refresh-content.sh dispatches this after refreshing the data snapshot.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -51,8 +54,14 @@ jobs:
 
       - name: Pipeline tests
         run: python3 -m unittest discover -s pipeline -p 'test_*.py' -t .
+      # The build id is code sha + snapshot hash. The Worker's edge cache keys
+      # on it and treats a build as immutable, so a refreshed snapshot on the
+      # same code must publish under a new id or the old pages stay cached.
       - name: Pull data snapshot
-        run: aws s3 cp $EP s3://bioc-site/_ci/site-data.tar.zst - | zstd -d | tar -x -C astro
+        run: |
+          aws s3 cp $EP s3://bioc-site/_ci/site-data.tar.zst site-data.tar.zst
+          zstd -dc site-data.tar.zst | tar -x -C astro
+          echo "BUILD_ID=${{ github.sha }}-$(sha256sum site-data.tar.zst | cut -c1-8)" >> "$GITHUB_ENV"
 
       - name: Build
         run: npm run build
@@ -80,12 +89,12 @@ jobs:
             aws s3 sync $EP --delete --no-progress astro/dist "$DEST"
 
       - name: Publish versioned build
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         run: |
-          DEST="s3://bioc-site/site/${{ github.sha }}"
+          DEST="s3://bioc-site/site/$BUILD_ID"
           aws s3 sync $EP --no-progress astro/dist "$DEST" ||
             aws s3 sync $EP --no-progress astro/dist "$DEST"
-          echo -n "${{ github.sha }}" | aws s3 cp $EP - s3://bioc-site/site/latest
+          echo -n "$BUILD_ID" | aws s3 cp $EP - s3://bioc-site/site/latest
 
       - name: Comment preview URL
         if: github.event_name == 'pull_request'
