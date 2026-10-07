@@ -101,6 +101,8 @@ const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
 const counterpart = channel && releases.find((r) => r.channel && r.channel !== channel);
 
 import PackageCitation from './PackageCitation.astro';
+// [whole, "MIT + file ", "LICENSE"] when the License field ends in "file LICENSE" (or LICENCE).
+const licenseFile = String(pkg.License ?? '').match(/^(.*\bfile\s+)(LICEN[CS]E)\s*$/);
 
 // Same DOI on every page kind: it is minted per package name and always
 // redirects to the current release (devel if the package isn't released yet).
@@ -132,22 +134,10 @@ import CopyButtons from './CopyButtons.astro';
     ? <p data-pagefind-ignore>This is the <b>development</b> version of {name}; for the stable release version, see <a href={`/packages/${counterpart.version}/${counterpart.repo}/html/${name}.html`}>{name}</a>.</p>
     : <p data-pagefind-ignore>This is the <b>development</b> version of {name}; to use it, please install the <a href="/developers/how-to/useDevel/">devel version</a> of Bioconductor.</p>
   )}
-  <p class="package-title">{pkg.Title}</p>
-  {badges.length > 0 && (
-    <div class="sidebar-box" id="badges-box" data-pagefind-ignore>
-      <section class="badges">
-        {badges.map(([href, src, alt, title]) => <a href={href}><img src={src} alt={alt} title={title} /></a>)}
-      </section>
-    </div>
-  )}
-  <p class="version" data-pagefind-ignore>
-    Bioconductor version: {version} &middot; Package version: {pkg.Version}
-  </p>
-
+  {/* The full list sits right under the release/devel line: one place for "which version am I on". */}
   {releases.length > 1 && (
     <details class="package-versions" data-pagefind-ignore>
-      <summary>Other Bioconductor versions</summary>
-      <p>devel is the development version; release is the current stable one.</p>
+      <summary>All Bioconductor versions of {name}</summary>
       <p>
         {releases.map((r, i) => {
           const label = `${r.version}${r.channel ? ` (${r.channel})` : ''}`;
@@ -163,13 +153,38 @@ import CopyButtons from './CopyButtons.astro';
       </p>
     </details>
   )}
+  <p class="package-title">{pkg.Title}</p>
+  {badges.length > 0 && (
+    <div class="sidebar-box" id="badges-box" data-pagefind-ignore>
+      <section class="badges">
+        {badges.map(([href, src, alt, title]) => <a href={href}><img src={src} alt={alt} title={title} /></a>)}
+      </section>
+    </div>
+  )}
+  <p class="version" data-pagefind-ignore>
+    Bioconductor version: {version} &middot; Package version: {pkg.Version}
+  </p>
 
   {pkg.Description && <p class="description">{pkg.Description}</p>}
+
+  {/* Author and Maintainer as prose under the description, where the legacy page had them. */}
+  {[['Author', pkg.Author], ['Maintainer', pkg.Maintainer]].map(([label, field]) => field && (
+    <p class="people"><strong>{label}:</strong>{' '}
+      {personParts(field).map((p) => typeof p === 'string' ? p : (
+        <a href={p.orcid} title="ORCID iD" class="orcid-container">
+          <img src="/images/orcid.png" alt="ORCID iD" class="orcid-icon" />
+          <span class="orcid-expanded"> ORCID: {p.id} </span>
+        </a>
+      ))}
+    </p>
+  ))}
 
   <p class="doi" data-pagefind-ignore>
     DOI: <a title="DOI for use in publications, etc., will always redirect to current release version (or devel if package is not in release yet)." href={`https://doi.org/${doi}`}>{doi}</a>
   </p>
 </div>
+
+<PackageCitation pkg={pkg} name={name} version={version} repo={repo} doi={doi} />
 
 <CopyButtons />
 <h2>Installation</h2>
@@ -181,17 +196,10 @@ import CopyButtons from './CopyButtons.astro';
 <table class="details">
   <tbody>
     {pkg.Version && <tr><td>Version</td><td>{pkg.Version}</td></tr>}
-    {[['Maintainer', pkg.Maintainer], ['Author', pkg.Author]].map(([label, field]) => field && (
-      <tr><td>{label}</td><td>
-        {personParts(field).map((p) => typeof p === 'string' ? p : (
-          <a href={p.orcid} title="ORCID iD" class="orcid-container">
-            <img src="/images/orcid.png" alt="ORCID iD" class="orcid-icon" />
-            <span class="orcid-expanded"> ORCID: {p.id} </span>
-          </a>
-        ))}
-      </td></tr>
-    ))}
-    {pkg.License && <tr><td>License</td><td>{pkg.License}</td></tr>}
+    {/* "+ file LICENSE" links the packaged file, as the legacy page did (licenses/ is on the mirror). */}
+    {pkg.License && <tr><td>License</td><td>{licenseFile
+      ? <>{licenseFile[1]}<a href={`/packages/${version}/${repo}/licenses/${name}/${licenseFile[2]}`}>{licenseFile[2]}</a></>
+      : pkg.License}</td></tr>}
     {pkg.URL && <tr><td>URL</td><td>{splitUrls(pkg.URL).map((u, i) => <>{i > 0 && ' '}<a href={u}>{u}</a></>)}</td></tr>}
     {pkg.BugReports && <tr><td>Bug Reports</td><td><a href={pkg.BugReports}>{pkg.BugReports}</a></td></tr>}
     {pkg.SystemRequirements && <tr><td>System Requirements</td><td>{pkg.SystemRequirements}</td></tr>}
@@ -213,13 +221,11 @@ import CopyButtons from './CopyButtons.astro';
     )}
     <tr>
       <td>Package Short Url</td>
-      <!-- Text, not a link: it is a Worker redirect, so no file in dist backs it. -->
-      <td title={`For citation in publications, etc., please use DOI: ${doi}`}>https://bioconductor.org/packages/{name}/</td>
+      <!-- Absolute: it is a Worker redirect, so no file in dist backs it, and the offline link check skips external URLs. -->
+      <td title={`For citation in publications, etc., please use DOI: ${doi}`}><a href={`https://bioconductor.org/packages/${name}/`}>https://bioconductor.org/packages/{name}/</a></td>
     </tr>
   </tbody>
 </table>
-
-<PackageCitation pkg={pkg} name={name} version={version} repo={repo} doi={doi} />
 
 <h2>Documentation</h2>
 {vignettes.length > 0 && (
