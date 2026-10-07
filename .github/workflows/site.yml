@@ -54,6 +54,11 @@ jobs:
 
       - name: Pipeline tests
         run: python3 -m unittest discover -s pipeline -p 'test_*.py' -t .
+
+      - name: Renderer tests
+        run: node --test src/lib/*.test.mjs
+        working-directory: astro
+
       # The build id is code sha + snapshot hash. The Worker's edge cache keys
       # on it and treats a build as immutable, so a refreshed snapshot on the
       # same code must publish under a new id or the old pages stay cached.
@@ -132,7 +137,7 @@ jobs:
           PKG=$(ls "dist/packages/$REL/bioc/html" | head -1)
           ./lychee --offline --root-dir "$PWD/dist" --no-progress \
             --exclude 'packages/[0-9.]+/(bioc|data|workflows)/' \
-            --exclude 'packages/(release|devel|stats)(/|$)' \
+            --exclude 'packages/(release|devel|stats)(/|$)' --exclude '/shields/' \
             --exclude '/checkResults$' --exclude '/dashboard$' \
             --exclude '/about/annual-reports$' --exclude '/developers/help_wanted$' \
             --exclude 'support\.bioconductor\.org' \

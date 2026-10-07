@@ -158,3 +158,37 @@ export function releasesOfPackage(name, pkg) {
     .filter((r) => !seen.has(r.version) && seen.add(r.version))
     .map((r) => ({ ...r, channel: channelOf(r.version) }));
 }
+
+// The URL field holds one or more URLs separated by commas, whitespace or both
+// ("https://a/, https://b"); one link each (bioc-infrastructure#100).
+export function splitUrls(field) {
+  return String(field ?? '').split(/[\s,]+/).filter(Boolean);
+}
+
+// An Author or Maintainer field as [text | { orcid, id }], as the legacy
+// filter_emails() helper rendered it: an ORCID annotation, "(ORCID: <url>)" or
+// "(<url>)", becomes an icon link, and an email in angle brackets stays text
+// with "@" spelled " at ".
+export function personParts(field) {
+  const s = String(field ?? '');
+  const parts = [];
+  let last = 0;
+  for (const m of s.matchAll(/\((?:ORCID:\s*)?<([^>]+)>\)|<([^>]*)>/g)) {
+    const url = m[1] ?? m[2];
+    parts.push(s.slice(last, m.index));
+    parts.push(/orcid/.test(url) && /^https?:\/\//.test(url)
+      ? { orcid: url, id: url.split('/').pop() }
+      : m[0].replace(/@/g, ' at '));
+    last = m.index + m[0].length;
+  }
+  parts.push(s.slice(last));
+  return parts.filter((p) => p !== '');
+}
+
+// The R version a release is built for ("4.6"), from the pipeline's
+// provenance.json; null for a release without one (the frozen snapshot).
+export function rVersion(version) {
+  const f = join(DATA, version, 'provenance.json');
+  if (!existsSync(f)) return null;
+  return JSON.parse(readFileSync(f, 'utf8')).r_version || null;
+}

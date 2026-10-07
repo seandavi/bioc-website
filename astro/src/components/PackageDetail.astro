@@ -5,7 +5,7 @@
  * style/pages/packages.css applies: `<details>` + `summary.package-details`
  * for the collapsible sections, and a details table for the metadata.
  */
-import { depHref, asArray, sinceLabel } from '../lib/packages.js';
+import { depHref, asArray, sinceLabel, splitUrls, personParts, rVersion } from '../lib/packages.js';
 
 // `indexed` marks this page for the build-time Pagefind index (release pages
 // only: indexing devel too would put near-duplicates in every result list).
@@ -24,6 +24,17 @@ const revFields = [
 ];
 const vignettes = asArray(pkg.vignettes);
 const vignetteTitles = asArray(pkg.vignetteTitles);
+// An R Script link only where the repository has the file: Rfiles lists them
+// (pipeline/packages.py, from VIEWS), as in the legacy doc_object() helper.
+const rfiles = new Set(asArray(pkg.Rfiles));
+const docs = vignettes.map((v, i) => {
+  const file = v.split('/').pop();
+  const script = v.replace(/\.(html|pdf)$/i, '.R');
+  return {
+    file, title: vignetteTitles[i] ?? file, type: file.split('.').pop().toUpperCase(),
+    script: script !== v && rfiles.has(script) ? script.split('/').pop() : null,
+  };
+});
 const hasDeps = depFields.some(([, l]) => asArray(l).length > 0);
 // Build reports exist for software, experiment data and workflows, not for
 // annotation packages (verified: /checkResults/<ver>/data-annotation-LATEST/<pkg>/
@@ -32,9 +43,47 @@ const hasDeps = depFields.some(([, l]) => asArray(l).length > 0);
 // version present is devel and its predecessor the release, as in the slug page.
 import { versions } from '../lib/packages.js';
 const [devel, release] = versions().reverse();
-const universe = { [devel]: 'bioc', [release]: 'bioc-release' }[version];
+const channel = { [devel]: 'devel', [release]: 'release' }[version];
+const universe = { devel: 'bioc', release: 'bioc-release' }[channel];
 const hasBuildReport = repo !== 'data/annotation';
-const buildReport = `https://bioconductor.org/checkResults/${version}/${repo.replace('/', '-')}-LATEST/${name}/`;
+const repoSlug = repo.replace('/', '-');
+const buildReport = `https://bioconductor.org/checkResults/${version}/${repoSlug}-LATEST/${name}/`;
+const statsUrl = `/packages/stats/${repoSlug}/${name}/`;
+const supportUrl = `https://support.bioconductor.org/tag/${name.toLowerCase()}`;
+// The legacy badge row (components/packages/badges.html). Shields are generated
+// for the live release and devel only, so archival pages get none. Annotation
+// packages have no build report, so no build, last-commit or dependency
+// shields; only software gets a per-package availability and years shield.
+const badges = !channel ? [] : [
+  ['#archives', repo === 'bioc' ? `/shields/availability/${channel}/${name}.svg` : '/images/shields/availability/all.svg',
+    'Platform availability badge', 'Whether the package is available on all platforms; click for details.'],
+  [statsUrl, `/shields/downloads/${channel}/${name}.svg`, 'Ranking badge',
+    'Ranking by number of downloads. A lower number means the package is downloaded more frequently. Determined within a package type (software, experiment, annotation, workflow) and uses the number of distinct IPs for the last 12 months.'],
+  [supportUrl, `/shields/posts/${name}.svg`, 'Support activity badge',
+    'Support site activity, last 6 months: answered posts / total posts.'],
+  repo === 'bioc' && ['#since', `/shields/years-in-bioc/${name}.svg`, 'Years in BioConductor badge',
+    'How long since the package was first in a released Bioconductor version (or is it in devel only).'],
+  ...(!hasBuildReport ? [] : [
+    [buildReport, `/shields/build/${channel}/${repoSlug}/${name}.svg`, 'Build results badge',
+      'build results; click for full report'],
+    [buildReport, `/shields/lastcommit/${channel}/${repoSlug}/${name}.svg`, 'Last commit badge',
+      'time since last commit. possible values: today, < 1 week, < 1 month, < 3 months, since release, before release'],
+    ['#since', `/shields/dependencies/${channel}/${name}.svg`, 'Dependency count badge',
+      'Number of recursive dependencies needed to install package.'],
+  ]),
+].filter(Boolean);
+const rver = rVersion(version);
+const install = [
+  'if (!require("BiocManager", quietly = TRUE))',
+  '    install.packages("BiocManager")',
+  '',
+  ...(channel === 'devel' ? [
+    '## The following initializes the development version of Bioconductor',
+    'BiocManager::install(version = "devel")',
+    '',
+  ] : []),
+  `BiocManager::install("${name}")`,
+].join('\n');
 // Same rows and labels as the legacy page's Package Archives table. Each path
 // names a file in the repository's own PACKAGES index (pipeline/packages.py
 // apply_downloads), so the link text is the real filename, version included.
@@ -48,8 +97,12 @@ import { releasesOfPackage } from '../lib/packages.js';
 // This package in every release that ships it. Plain links, so it works without JS.
 const releases = releasesOfPackage(name, pkg);
 const hasRev = revFields.some(([, l]) => asArray(l).length > 0);
+// This package on the other live channel, for the release/devel line.
+const counterpart = channel && releases.find((r) => r.channel && r.channel !== channel);
 
 import PackageCitation from './PackageCitation.astro';
+// [whole, "MIT + file ", "LICENSE"] when the License field ends in "file LICENSE" (or LICENCE).
+const licenseFile = String(pkg.License ?? '').match(/^(.*\bfile\s+)(LICEN[CS]E)\s*$/);
 
 // Same DOI on every page kind: it is minted per package name and always
 // redirects to the current release (devel if the package isn't released yet).
@@ -74,15 +127,17 @@ import CopyButtons from './CopyButtons.astro';
 >
   {indexed && <span hidden data-pagefind-filter={`repo:${repoLabels[repo] ?? repo}`} />}
   <h1 data-pagefind-weight="10">{name}</h1>
-  <p class="package-title">{pkg.Title}</p>
-  <p class="version" data-pagefind-ignore>
-    Bioconductor version: {version} &middot; Package version: {pkg.Version}
-  </p>
-
+  {channel === 'release' && counterpart && (
+    <p data-pagefind-ignore>This is the <b>released</b> version of {name}; for the devel version, see <a href={`/packages/${counterpart.version}/${counterpart.repo}/html/${name}.html`}>{name}</a>.</p>
+  )}
+  {channel === 'devel' && (counterpart
+    ? <p data-pagefind-ignore>This is the <b>development</b> version of {name}; for the stable release version, see <a href={`/packages/${counterpart.version}/${counterpart.repo}/html/${name}.html`}>{name}</a>.</p>
+    : <p data-pagefind-ignore>This is the <b>development</b> version of {name}; to use it, please install the <a href="/developers/how-to/useDevel/">devel version</a> of Bioconductor.</p>
+  )}
+  {/* The full list sits right under the release/devel line: one place for "which version am I on". */}
   {releases.length > 1 && (
     <details class="package-versions" data-pagefind-ignore>
-      <summary>Other Bioconductor versions</summary>
-      <p>devel is the development version; release is the current stable one.</p>
+      <summary>All Bioconductor versions of {name}</summary>
       <p>
         {releases.map((r, i) => {
           const label = `${r.version}${r.channel ? ` (${r.channel})` : ''}`;
@@ -98,32 +153,58 @@ import CopyButtons from './CopyButtons.astro';
       </p>
     </details>
   )}
+  <p class="package-title">{pkg.Title}</p>
+  {badges.length > 0 && (
+    <div class="sidebar-box" id="badges-box" data-pagefind-ignore>
+      <section class="badges">
+        {badges.map(([href, src, alt, title]) => <a href={href}><img src={src} alt={alt} title={title} /></a>)}
+      </section>
+    </div>
+  )}
+  <p class="version" data-pagefind-ignore>
+    Bioconductor version: {version} &middot; Package version: {pkg.Version}
+  </p>
 
   {pkg.Description && <p class="description">{pkg.Description}</p>}
+
+  {/* Author and Maintainer as prose under the description, where the legacy page had them. */}
+  {[['Author', pkg.Author], ['Maintainer', pkg.Maintainer]].map(([label, field]) => field && (
+    <p class="people"><strong>{label}:</strong>{' '}
+      {personParts(field).map((p) => typeof p === 'string' ? p : (
+        <a href={p.orcid} title="ORCID iD" class="orcid-container">
+          <img src="/images/orcid.png" alt="ORCID iD" class="orcid-icon" />
+          <span class="orcid-expanded"> ORCID: {p.id} </span>
+        </a>
+      ))}
+    </p>
+  ))}
 
   <p class="doi" data-pagefind-ignore>
     DOI: <a title="DOI for use in publications, etc., will always redirect to current release version (or devel if package is not in release yet)." href={`https://doi.org/${doi}`}>{doi}</a>
   </p>
 </div>
 
+<PackageCitation pkg={pkg} name={name} version={version} repo={repo} doi={doi} />
+
 <CopyButtons />
 <h2>Installation</h2>
-<pre><code>{`if (!require("BiocManager", quietly = TRUE))
-    install.packages("BiocManager")
-
-BiocManager::install("${name}")`}</code></pre>
+<p>To install this package, start R{rver && ` (version "${rver}")`} and enter:</p>
+<pre><code>{install}</code></pre>
+<p>For older versions of R, please refer to the appropriate <a href="/about/release-announcements/">Bioconductor release</a>.</p>
 
 <h2>Details</h2>
 <table class="details">
   <tbody>
-    {pkg.Maintainer && <tr><td>Maintainer</td><td>{pkg.Maintainer}</td></tr>}
-    {pkg.Author && <tr><td>Author</td><td>{pkg.Author}</td></tr>}
-    {pkg.License && <tr><td>License</td><td>{pkg.License}</td></tr>}
-    {pkg.URL && <tr><td>URL</td><td><a href={pkg.URL}>{pkg.URL}</a></td></tr>}
+    {pkg.Version && <tr><td>Version</td><td>{pkg.Version}</td></tr>}
+    {/* "+ file LICENSE" links the packaged file, as the legacy page did (licenses/ is on the mirror). */}
+    {pkg.License && <tr><td>License</td><td>{licenseFile
+      ? <>{licenseFile[1]}<a href={`/packages/${version}/${repo}/licenses/${name}/${licenseFile[2]}`}>{licenseFile[2]}</a></>
+      : pkg.License}</td></tr>}
+    {pkg.URL && <tr><td>URL</td><td>{splitUrls(pkg.URL).map((u, i) => <>{i > 0 && ' '}<a href={u}>{u}</a></>)}</td></tr>}
     {pkg.BugReports && <tr><td>Bug Reports</td><td><a href={pkg.BugReports}>{pkg.BugReports}</a></td></tr>}
     {pkg.SystemRequirements && <tr><td>System Requirements</td><td>{pkg.SystemRequirements}</td></tr>}
     {pkg.Updated && <tr><td>Last updated</td><td>{pkg.Updated}</td></tr>}
-    {pkg.since && <tr><td>In Bioconductor since</td><td>{sinceLabel(pkg.since)}</td></tr>}
+    {pkg.since && <tr id="since"><td>In Bioconductor since</td><td>{sinceLabel(pkg.since)}</td></tr>}
     {pkg.PackageStatus && <tr><td>Status</td><td>{pkg.PackageStatus}</td></tr>}
     {pkg.DownloadRank && <tr><td>Downloads rank</td><td>{pkg.DownloadRank} of {repoSize.toLocaleString('en-US')}</td></tr>}
     {pkg.git_branch && <tr><td>Source branch</td><td>{pkg.git_branch}</td></tr>}
@@ -134,44 +215,63 @@ BiocManager::install("${name}")`}</code></pre>
       </tr>
     )}
     {pkg.biocViews && (
-      <tr><td>biocViews</td><td>{asArray(pkg.biocViews).join(', ')}</td></tr>
+      <tr><td>biocViews</td><td>{asArray(pkg.biocViews).map((v, i) => (
+        <>{i > 0 && ', '}<a href={`/packages/${version}/BiocViews.html#___${v}`}>{v}</a></>
+      ))}</td></tr>
     )}
     <tr>
       <td>Package Short Url</td>
-      <!-- Text, not a link: it is a Worker redirect, so no file in dist backs it. -->
-      <td title={`For citation in publications, etc., please use DOI: ${doi}`}>https://bioconductor.org/packages/{name}/</td>
+      <!-- Absolute: it is a Worker redirect, so no file in dist backs it, and the offline link check skips external URLs. -->
+      <td title={`For citation in publications, etc., please use DOI: ${doi}`}><a href={`https://bioconductor.org/packages/${name}/`}>https://bioconductor.org/packages/{name}/</a></td>
     </tr>
   </tbody>
 </table>
 
-<PackageCitation pkg={pkg} name={name} version={version} repo={repo} doi={doi} />
-
+<h2>Documentation</h2>
 {vignettes.length > 0 && (
   <>
-    <h2>Documentation</h2>
-    <ul class="vignettes">
-      {vignettes.map((v, i) => (
-        <li>
-          <a href={`/packages/${version}/${repo}/vignettes/${name}/inst/doc/${v.split('/').pop()}`}>
-            {vignetteTitles[i] ?? v.split('/').pop()}
-          </a>
-        </li>
-      ))}
-    </ul>
+    <p>To view documentation for the version of this package installed in your system, start R and enter:</p>
+    <pre><code>{`browseVignettes("${name}")`}</code></pre>
   </>
 )}
+<table class="vignettes">
+  {docs.map((d) => (
+    <tr>
+      <td>{d.title}</td>
+      <td><a href={`/packages/${version}/${repo}/vignettes/${name}/inst/doc/${d.file}`}>{d.type}</a></td>
+      {d.script && <td><a href={`/packages/${version}/${repo}/vignettes/${name}/inst/doc/${d.script}`}>R Script</a></td>}
+    </tr>
+  ))}
+  <!-- The legacy build makes no manual for workflows (rnaseqGene's is a 404). -->
+  {repo !== 'workflows' && (
+    <tr><td>Reference Manual</td><td><a href={`/packages/${version}/${repo}/manuals/${name}/man/${name}.pdf`}>PDF</a></td></tr>
+  )}
+  {pkg.hasNEWS && <tr><td>NEWS</td><td><a href={`/packages/${version}/${repo}/news/${name}/NEWS`}>Text</a></td></tr>}
+</table>
+<div class="info-section-button-padding">
+  <a class="brand-border-button" href={supportUrl}>
+    <span class="span-brand format-bold">Need some help? Ask on the Bioconductor Support site!</span>
+  </a>
+</div>
 
-{pkg['source.ver'] && (
-  <>
-    <h2>Download</h2>
-    <p>Follow the <a href="/install/#install-bioconductor-packages">installation instructions</a> to use this package in your R session.</p>
-    <table class="downloads">
-      {downloads.map(([label, path]) => (
-        <tr><td>{label}</td><td><a href={`/packages/${version}/${repo}/${path}`}>{path.split('/').pop()}</a></td></tr>
-      ))}
-    </table>
-  </>
-)}
+<h2 id="archives">Download</h2>
+<p>Follow the <a href="/install/#install-bioconductor-packages">installation instructions</a> to use this package in your R session.</p>
+<table class="downloads">
+  {downloads.map(([label, path]) => (
+    <tr><td>{label}</td><td><a href={`/packages/${version}/${repo}/${path}`}>{path.split('/').pop()}</a></td></tr>
+  ))}
+  <!-- As the legacy archives.html: annotation packages are not in git. -->
+  {repo !== 'data/annotation' && (
+    <>
+      <tr><td>Source Repository</td><td>git clone https://git.bioconductor.org/packages/{name}</td></tr>
+      <tr><td>Source Repository (Developer Access)</td><td>git clone git@git.bioconductor.org:packages/{name}</td></tr>
+    </>
+  )}
+  <tr><td>Package Downloads Report</td><td><a href={statsUrl}>Download Stats</a></td></tr>
+  {pkg.hasArchive && (
+    <tr><td>Old Source Packages for BioC {version}</td><td><a href={`/packages/${version}/${repo}/src/contrib/Archive/${name}/`}>Source Archive</a></td></tr>
+  )}
+</table>
 
 {hasDeps && (
   <details class="package-deps" open>
