@@ -100,20 +100,38 @@ Concretely (`.github/workflows/site.yml`):
   `/data/davsean/bioc-site-refresh/upstream-head` and
   `systemctl --user start bioc-site-refresh`.
 
-  **Package data (`data/<release>`) is refreshed by hand**: run the full
-  pipeline locally and re-upload:
+  **Package data (`data/<release>`) refreshes daily.** `ops/refresh-packages.sh`,
+  run at 06:00 UTC by `ops/systemd/bioc-site-packages.timer` on onclappc02,
+  reruns `./bioc.py packages` and `./bioc.py tree` for each release already in
+  the snapshot, on top of the current snapshot. `since` ("In Bioconductor
+  since") and `releases` need every release from 2.5 on disk, so the script
+  extracts the frozen 2.5–3.22 history from `_ci/site-data-full.tar.zst` once,
+  into `/data/davsean/bioc-site-refresh/history`. Before uploading,
+  `pipeline/refresh_check.py` compares the result with the snapshot it
+  replaces: if any release/repository lost more than 2% of its packages, or
+  any record lacks `since`, `DownloadRank` or `releases`, the run fails and
+  nothing is uploaded. A pipeline error fails the run the same way. Both
+  scripts take a lock on `/data/davsean/bioc-site-refresh/snapshot.lock` from
+  download to upload, so neither overwrites the other's changes. To force a
+  run, `systemctl --user start bioc-site-packages`; to try one without
+  uploading, `DRY_RUN=1 ops/refresh-packages.sh`. Adding or retiring a live
+  release (and moving the retired one into the history) is still by hand.
+
+  **Rolling back** either job: every replaced snapshot is kept for 90 days
+  under `/data/davsean/bioc-site-refresh/snapshots`, named for the job that
+  replaced it (`*.packages.prev.tar.zst`, `*.prev.tar.zst`). Copy one back
+  and rebuild:
 
   ```sh
-  just data
-  tar -C astro -cf - data/site data/3.23 data/3.24 public | zstd -T0 -8 \
-    | rclone rcat r2:bioc-site/_ci/site-data.tar.zst
+  rclone copyto /data/davsean/bioc-site-refresh/snapshots/<file> \
+    r2:bioc-site/_ci/site-data.tar.zst
+  gh workflow run site.yml -R seandavi/bioc-website --ref main
   ```
 
-  The refresh needs the full release history under `astro/data/` (see below):
-  `since` ("In Bioconductor since") is computed from the releases on disk and
-  is left out, with a warning, when `2.5` is not among them.
+  Stop the timers first if the next run would undo the rollback.
 
-  Scheduling that refresh is [#5](https://github.com/seandavi/bioconductor-website/issues/5). How
+  The package refresh's inputs, and what each becomes after the registry
+  switch, are planned in [bioc-infrastructure#103](https://github.com/seandavi/bioc-infrastructure/issues/103). How
   site content should be managed and published in general is open for
   discussion in [bioc-infrastructure#91](https://github.com/seandavi/bioc-infrastructure/issues/91).
   The full 35-release data — including the frozen 2.5–3.22 snapshot, which is

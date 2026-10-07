@@ -8,9 +8,8 @@
 #   FORCE=1 ops/refresh-content.sh    # refresh regardless
 #
 # Only data/site and public are regenerated. data/<release>/ (package data)
-# is carried over from the current snapshot untouched: refreshing it needs
-# the full release history on disk (see README, "Builds read a data
-# snapshot"), and is tracked separately in #5.
+# is carried over from the current snapshot untouched: ops/refresh-packages.sh
+# refreshes it.
 #
 # Every snapshot this replaces is kept under $WORK/snapshots, so any build
 # can be traced back to the exact data it was built from.
@@ -30,6 +29,12 @@ if [[ -z ${FORCE:-} && $head == "$last" ]]; then
   exit 0
 fi
 echo "upstream devel ${last:-<none>} -> $head"
+
+# Shared with refresh-packages.sh: both download, modify and upload the same
+# snapshot, so neither may read it while the other has yet to upload. That
+# run can take a while; upstream-head is not updated, so the next run retries.
+exec 9>"$WORK/snapshot.lock"
+flock -n 9 || { echo "snapshot locked by another refresh; retrying next run"; exit 0; }
 
 # Start from the snapshot CI builds from, not from whatever is on disk.
 git clean -fdxq astro/data astro/public
