@@ -183,6 +183,20 @@ def from_views(version, repo, branch):
     return out
 
 
+def rfiles_from_views(text):
+    """{package: Rfiles} from a VIEWS file: the vignette R scripts the repository
+    actually serves. r-universe has no equivalent, and the name can't be derived
+    from the vignette (edgeR's Sweave User's Guide has no .R file)."""
+    return {n: split_list(r["Rfiles"]) for n, r in parse_dcf(text).items() if r.get("Rfiles")}
+
+
+def archived_packages(listing):
+    """Package names in a src/contrib/Archive/ directory listing: the packages
+    with older versions archived in this release (the legacy page HEADed
+    Archive/<pkg>/ for each one)."""
+    return set(re.findall(r'href="[^"]*/Archive/([^/"]+)/"', listing))
+
+
 def repo_config(mirror=net.MIRROR):
     """The repository's own config.yaml: what BiocManager reads to map a
     Bioconductor version to its R version and to release/devel."""
@@ -371,6 +385,20 @@ def main(argv=None):
     if args.software_origin == "runiverse":
         repos["bioc"] = software_only(
             repos["bioc"], [set(repos[r]) | set(from_views(args.bioc, r, branch)) for r in REPOS[1:]])
+        # Optional: without it the pages just show no R Script links.
+        if views := fetch(f"{SITE}/packages/{args.bioc}/bioc/VIEWS", optional=True):
+            for name, rfiles in rfiles_from_views(views).items():
+                if name in repos["bioc"]:
+                    repos["bioc"][name]["Rfiles"] = rfiles
+
+    # Source archives exist only for releases (devel has no Archive/) and only
+    # for software, as on the legacy page. Optional: no field, no link.
+    if str(cfg.get("devel_version")) != args.bioc:
+        listing = fetch(f"{SITE}/packages/{args.bioc}/bioc/src/contrib/Archive/", optional=True)
+        if listing:
+            archived = archived_packages(listing)
+            for name, rec in repos["bioc"].items():
+                rec["hasArchive"] = name in archived
 
     # Reverse dependencies span every repository AND CRAN — a Bioconductor page
     # lists CRAN packages that depend on it. So the graph is built from all four

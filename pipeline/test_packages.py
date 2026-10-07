@@ -62,6 +62,23 @@ class ApplyDownloads(unittest.TestCase):
         self.assertIn("mac.binary.big-sur-arm64.ver", bin_dirs("4.5"))
 
 
+class RfilesFromViews(unittest.TestCase):
+    def test_lists_only_the_scripts_views_names(self):
+        views = ("Package: edgeR\nvignettes: vignettes/edgeR/inst/doc/intro.html,\n"
+                 "        vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf\n"
+                 "Rfiles: vignettes/edgeR/inst/doc/intro.R\n\nPackage: limma\n")
+        self.assertEqual(packages.rfiles_from_views(views),
+                         {"edgeR": ["vignettes/edgeR/inst/doc/intro.R"]})
+
+
+class ArchivedPackages(unittest.TestCase):
+    def test_names_from_the_directory_listing(self):
+        listing = ('<li><a href="/packages/3.23/bioc/src/contrib/">Parent Directory</a></li>\n'
+                   '<li><a href="/packages/3.23/bioc/src/contrib/Archive/edgeR/">edgeR/</a></li>\n'
+                   '<li><a href="/packages/3.23/bioc/src/contrib/Archive/AnVIL/">AnVIL/</a></li>')
+        self.assertEqual(packages.archived_packages(listing), {"edgeR", "AnVIL"})
+
+
 class RankByScore(unittest.TestCase):
     def test_most_downloaded_is_rank_one_and_ties_share_the_best_rank(self):
         scores = {"a": 50, "b": 90, "c": 50, "d": 10}
