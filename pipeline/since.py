@@ -1,17 +1,26 @@
 """'In Bioconductor since' and the releases list: which releases each package is in.
 
-The history is the per-release packages.json files already under astro/data/;
-the R version and release date of that release come from the site's config.yaml.
-Data starts at 2.5 (JSON exists from there), so a package first seen then is
-"2.5 or earlier", not "2.5".
+For software, "since" is what the legacy site showed: the oldest release whose
+branch of the manifest repo lists the package in software.txt (manifest_first).
+The manifest starts at 1.6, so a package listed there is "1.6 or earlier".
+
+The legacy site showed no "since" for the other repos. Theirs, and every
+package's releases list, come from the per-release packages.json files already
+under astro/data/. Those start at 2.5, so a package first seen there is "2.5 or
+earlier". The R version and release date of a release come from the site's
+config.yaml.
 """
 
 import datetime
 import json
 import os
 import re
+import subprocess
+import tempfile
 
 EARLIEST = "2.5"
+MANIFEST_EARLIEST = "1.6"
+MANIFEST = "https://git.bioconductor.org/admin/manifest"
 REPOS = ("bioc", "data/annotation", "data/experiment", "workflows")
 
 
@@ -60,8 +69,38 @@ def releases(where, version, repo):
     return [[v, merged[v]] for v in sorted(merged, key=version_key, reverse=True)]
 
 
-def record(version, cfg):
-    """The `since` field for a package first seen in `version`.
+def manifest_lists(cfg, url=MANIFEST):
+    """{release: software.txt} for every release in config.yaml's release_dates
+    plus devel, read from one shallow clone of the manifest repo. A release
+    with no branch (before 1.6) is left out, as the legacy Rules file did."""
+    devel = str(cfg.get("devel_version"))
+    branches = {v: "devel" if v == devel else "RELEASE_" + v.replace(".", "_")
+                for v in [*(cfg.get("release_dates") or {}), devel]}
+    with tempfile.TemporaryDirectory() as d:
+        subprocess.run(["git", "clone", "-q", "--bare", "--depth", "1", "--no-single-branch", url, d],
+                       check=True)
+        out = {}
+        for v, branch in branches.items():
+            r = subprocess.run(["git", "-C", d, "show", f"{branch}:software.txt"],
+                               capture_output=True, text=True)
+            if r.returncode == 0:
+                out[v] = r.stdout
+        return out
+
+
+def manifest_first(lists):
+    """{package: oldest release whose software.txt lists it} from manifest_lists()."""
+    first = {}
+    for v in sorted(lists, key=version_key):
+        for line in lists[v].splitlines():
+            if line.startswith("Package: "):
+                first.setdefault(line[len("Package: "):].strip(), v)
+    return first
+
+
+def record(version, cfg, earliest=EARLIEST):
+    """The `since` field for a package first seen in `version`; `earliest` is
+    the oldest release of the history it was read from.
 
     No R version is an error. No release date is an error too, except for the
     devel version, which has not been released yet."""
@@ -74,6 +113,6 @@ def record(version, cfg):
         rec["date"] = datetime.datetime.strptime(date, "%m/%d/%Y").date().isoformat()
     elif version != str(cfg.get("devel_version")):
         raise SystemExit(f"config.yaml has no release_dates for {version}")
-    if version == EARLIEST:
+    if version == earliest:
         rec["orEarlier"] = True
     return rec

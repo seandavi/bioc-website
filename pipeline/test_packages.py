@@ -62,13 +62,18 @@ class ApplyDownloads(unittest.TestCase):
         self.assertIn("mac.binary.big-sur-arm64.ver", bin_dirs("4.5"))
 
 
-class RfilesFromViews(unittest.TestCase):
-    def test_lists_only_the_scripts_views_names(self):
+class FilesFromViews(unittest.TestCase):
+    def test_scripts_file_flags_and_archs_as_views_names_them_absent_flags_false(self):
         views = ("Package: edgeR\nvignettes: vignettes/edgeR/inst/doc/intro.html,\n"
                  "        vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf\n"
-                 "Rfiles: vignettes/edgeR/inst/doc/intro.R\n\nPackage: limma\n")
-        self.assertEqual(packages.rfiles_from_views(views),
-                         {"edgeR": ["vignettes/edgeR/inst/doc/intro.R"]})
+                 "Rfiles: vignettes/edgeR/inst/doc/intro.R\nhasREADME: FALSE\nhasNEWS: TRUE\n"
+                 "Archs: x64\n\nPackage: limma\n")
+        self.assertEqual(packages.files_from_views(views),
+                         {"edgeR": {"Rfiles": ["vignettes/edgeR/inst/doc/intro.R"], "hasREADME": False,
+                                    "hasNEWS": True, "hasINSTALL": False, "hasLICENSE": False,
+                                    "Archs": "x64"},
+                          "limma": {"hasNEWS": False, "hasREADME": False, "hasINSTALL": False,
+                                    "hasLICENSE": False}})
 
 
 class ArchivedPackages(unittest.TestCase):

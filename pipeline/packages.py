@@ -144,8 +144,8 @@ def from_runiverse(universe, branch):
             rec["vignettes"] = [f"vignettes/{name}/inst/doc/{v['filename']}" for v in vigs]
             rec["vignetteTitles"] = [v.get("title", v["filename"]) for v in vigs]
         assets = p.get("_assets") or []
+        # Overridden by VIEWS (files_from_views) when it is available.
         rec["hasNEWS"] = any("NEWS" in a for a in assets)
-        rec["hasREADME"] = bool(p.get("_readme"))
         out[name] = rec
     return out
 
@@ -183,11 +183,25 @@ def from_views(version, repo, branch):
     return out
 
 
-def rfiles_from_views(text):
-    """{package: Rfiles} from a VIEWS file: the vignette R scripts the repository
-    actually serves. r-universe has no equivalent, and the name can't be derived
-    from the vignette (edgeR's Sweave User's Guide has no .R file)."""
-    return {n: split_list(r["Rfiles"]) for n, r in parse_dcf(text).items() if r.get("Rfiles")}
+def files_from_views(text):
+    """{package: fields} from a VIEWS file for what the repository serves beside
+    the tarball, as the legacy page read them: Rfiles (vignette R scripts),
+    hasNEWS/hasREADME/hasINSTALL/hasLICENSE (news/, readmes/, install/,
+    licenses/) and Archs (the Windows binary's architectures). r-universe has
+    no equivalent: an R script name can't be derived from the vignette (edgeR's
+    Sweave User's Guide has no .R file), and its README and NEWS are the git
+    repository's, not files the repository serves. A flag VIEWS leaves out (a
+    package whose build failed) is False, as the legacy page read it."""
+    out = {}
+    for name, r in parse_dcf(text).items():
+        rec = {k: r.get(k, "").strip().upper() == "TRUE"
+               for k in ("hasNEWS", "hasREADME", "hasINSTALL", "hasLICENSE")}
+        if r.get("Rfiles"):
+            rec["Rfiles"] = split_list(r["Rfiles"])
+        if r.get("Archs"):
+            rec["Archs"] = r["Archs"]
+        out[name] = rec
+    return out
 
 
 def archived_packages(listing):
@@ -385,11 +399,12 @@ def main(argv=None):
     if args.software_origin == "runiverse":
         repos["bioc"] = software_only(
             repos["bioc"], [set(repos[r]) | set(from_views(args.bioc, r, branch)) for r in REPOS[1:]])
-        # Optional: without it the pages just show no R Script links.
+        # Optional: without it the pages just show no R Script, README,
+        # INSTALL or LICENSE links, and NEWS as r-universe sees it.
         if views := fetch(f"{SITE}/packages/{args.bioc}/bioc/VIEWS", optional=True):
-            for name, rfiles in rfiles_from_views(views).items():
+            for name, fields in files_from_views(views).items():
                 if name in repos["bioc"]:
-                    repos["bioc"][name]["Rfiles"] = rfiles
+                    repos["bioc"][name].update(fields)
 
     # Source archives exist only for releases (devel has no Archive/) and only
     # for software, as on the legacy page. Optional: no field, no link.
@@ -427,6 +442,9 @@ def main(argv=None):
         print(f"[{repo}] downloads from the repository's PACKAGES: {len(corrected)} versions "
               f"corrected, {len(unserved)} not in the repository", file=sys.stderr)
 
+    # "since" for anything ever in the manifest's software.txt, as the legacy
+    # site had it; the history on disk only for the rest.
+    software_first = since.manifest_first(since.manifest_lists(cfg))
     # First release and release list per package, from the releases already on
     # disk. If any release from 2.5 up to this one is missing, "first seen" and
     # the list are wrong, so both fields are left out, loudly.
@@ -453,8 +471,11 @@ def main(argv=None):
             root = ROOT_TERM.get(repo)
             if root:
                 rec["biocViews"] = sorted(set(rec.get("biocViews", [])) | {root})
-            if first is not None:
+            if name in software_first:
+                rec["since"] = since.record(software_first[name], cfg, since.MANIFEST_EARLIEST)
+            elif first is not None:
                 rec["since"] = records[first.get(name, args.bioc)]
+            if first is not None:
                 rec["releases"] = since.releases(where.get(name, {}), args.bioc, repo)
             rec["dependencyCount"] = str(len({
                 dep_name(d) for role in ("Depends", "Imports", "LinkingTo")

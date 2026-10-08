@@ -107,16 +107,17 @@ export function liveVersions() {
   return { release: vs.at(-2), devel: vs.at(-1) };
 }
 
-// "BioC 2.14 (R-3.1) (12 years)" from a record's `since` field (pipeline/since.py).
-// Whole years since the release date, counted at build time; a release with no
-// date (devel) gets none.
+// "BioC 1.6 (R-2.1) or earlier (> 21.5 years)" from a record's `since` field
+// (pipeline/since.py), as the legacy years_in_bioc() helper wrote it: years
+// since the release date to the nearest half year, counted at build time,
+// "< 6 months" up to half a year, and none for a release with no date (devel).
 export function sinceLabel({ release, r, date, orEarlier }, now = new Date()) {
-  let label = `BioC ${release}${orEarlier ? ' or earlier' : ''} (R-${r})`;
+  let label = `BioC ${release} (R-${r})${orEarlier ? ' or earlier' : ''}`;
   if (date) {
-    const d = new Date(date);
-    let years = now.getUTCFullYear() - d.getUTCFullYear();
-    if (now.getUTCMonth() < d.getUTCMonth() || (now.getUTCMonth() === d.getUTCMonth() && now.getUTCDate() < d.getUTCDate())) years--;
-    label += years < 1 ? ' (less than a year)' : ` (${years} ${years === 1 ? 'year' : 'years'})`;
+    const years = Math.floor((now - new Date(date)) / 864e5) / 365.25;
+    const half = Math.round(years * 2) / 2;
+    label += years <= 0.5 ? ' (< 6 months)'
+      : ` (${orEarlier ? '> ' : ''}${half} ${half === 1 ? 'year' : 'years'})`;
   }
   return label;
 }
