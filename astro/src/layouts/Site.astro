@@ -58,6 +58,20 @@ const SCRIPTS = [
     <link rel="canonical" href={canonicalUrl(canonical)} />
     {STYLES.map((s) => <link rel="stylesheet" type="text/css" href={`/style/${s}`} />)}
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <!-- Bioconductor's Google tag, as master's layouts/components/sitescripts.html (#69).
+         Production hosts only, so PR previews and local builds don't count. -->
+    <script is:inline>
+      if (/^(www\.)?bioconductor\.org$/.test(location.hostname)) {
+        const s = document.createElement('script');
+        s.async = true;
+        s.src = 'https://www.googletagmanager.com/gtag/js?id=G-WJMEEH1J58';
+        document.head.append(s);
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () { dataLayer.push(arguments); };
+        gtag('js', new Date());
+        gtag('config', 'G-WJMEEH1J58');
+      }
+    </script>
   </head>
   <body class={bodyClass}>
     <Header />
