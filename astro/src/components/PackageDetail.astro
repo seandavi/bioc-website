@@ -222,7 +222,8 @@ import CopyButtons from './CopyButtons.astro';
     <tr>
       <td>Package Short Url</td>
       <!-- Absolute: it is a Worker redirect, so no file in dist backs it, and the offline link check skips external URLs. -->
-      <td title={`For citation in publications, etc., please use DOI: ${doi}`}><a href={`https://bioconductor.org/packages/${name}/`}>https://bioconductor.org/packages/{name}/</a></td>
+      <!-- set:text: an <a> with expression content inside a <td> is re-opened after </table> by the compiler (withastro/compiler#958), turning the rest of the page into one link (bioc-infrastructure#106). -->
+      <td title={`For citation in publications, etc., please use DOI: ${doi}`}><a href={`https://bioconductor.org/packages/${name}/`} set:text={`https://bioconductor.org/packages/${name}/`} /></td>
     </tr>
   </tbody>
 </table>
