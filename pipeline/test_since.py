@@ -1,13 +1,14 @@
 """python3 -m unittest discover -s pipeline -p 'test_*.py'"""
 import json
 import os
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
 
 from pipeline.net import commit_date, packaged_date
 from pipeline.packages import apply_downloads, from_runiverse
-from pipeline.since import history, missing, record, releases
+from pipeline.since import history, manifest_first, manifest_lists, missing, record, releases
 from pipeline.tarballs import to_record
 
 CFG = {
@@ -96,6 +97,38 @@ class Record(unittest.TestCase):
             record("3.0", CFG)  # no R version
         with self.assertRaises(SystemExit):
             record("3.23", {**CFG, "release_dates": {}})  # released, no date
+
+
+    def test_manifest_history_reads_or_earlier_at_1_6_only(self):
+        cfg = {**CFG, "r_ver_for_bioc_ver": {**CFG["r_ver_for_bioc_ver"], "1.6": "2.1"},
+               "release_dates": {**CFG["release_dates"], "1.6": "5/18/2005"}}
+        self.assertEqual(record("1.6", cfg, "1.6"),
+                         {"release": "1.6", "r": "2.1", "date": "2005-05-18", "orEarlier": True})
+        self.assertNotIn("orEarlier", record("2.5", cfg, "1.6"))
+
+
+class Manifest(unittest.TestCase):
+    def test_first_is_the_oldest_release_listing_the_package_in_numeric_order(self):
+        lists = {"3.10": "Package: b\n\nPackage: c\n", "1.6": "## comment\nPackage: a \n",
+                 "3.9": "Package: a\nPackage: b\n", "3.24": "Package: d\n"}
+        self.assertEqual(manifest_first(lists), {"a": "1.6", "b": "3.9", "c": "3.10", "d": "3.24"})
+
+    def test_lists_reads_software_txt_per_release_branch_and_devel(self):
+        def git(*a):
+            subprocess.run(["git", "-C", d, *a], check=True, capture_output=True)
+        with tempfile.TemporaryDirectory() as d:
+            git("init", "-q", "-b", "devel")
+            git("config", "user.email", "t@example.org")
+            git("config", "user.name", "t")
+            for branch, text in [("devel", "Package: new\n"), ("RELEASE_1_6", "Package: old\n")]:
+                git("checkout", "-q", "-B", branch)
+                with open(f"{d}/software.txt", "w") as fh:
+                    fh.write(text)
+                git("add", "software.txt")
+                git("commit", "-q", "-m", branch)
+            cfg = {"devel_version": "3.24", "release_dates": {"1.5": "x", "1.6": "x"}}
+            self.assertEqual(manifest_lists(cfg, url=f"file://{d}"),
+                             {"1.6": "Package: old\n", "3.24": "Package: new\n"})
 
 
 class Packaged(unittest.TestCase):

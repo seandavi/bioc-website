@@ -24,8 +24,7 @@ const citationUrl = repo === 'data/annotation'
 ---
 {title && pkg.Version && (
   <div id="citation" data-pagefind-ignore>
-    <h2>Citation</h2>
-    <p>From within R, enter <code>citation("{name}")</code>:</p>
+    <strong>Citation (from within R, enter <code>citation("{name}")</code>):</strong>
     <div id="citation-text" class="bioc-citation" data-citation-url={citationUrl}>
       <p class="citation">
         {authors && `${authors}. `}<em>{name}: {title}</em>. doi:<a href={`https://doi.org/${doi}`}>{doi}</a>,
