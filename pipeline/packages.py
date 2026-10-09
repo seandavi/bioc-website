@@ -102,7 +102,10 @@ def parse_dcf(text):
 
 
 def split_list(v):
-    return [x.strip() for x in re.split(r",\s*", v) if x.strip()] if v else []
+    # VIEWS escapes a comma inside an item as ",," ("3. Errors,, Logs and
+    # Debugging"); the legacy page shows it as one comma.
+    return [x.strip().replace(",,", ",") for x in re.split(r"(?<!,),(?!,)\s*", v)
+            if x.strip()] if v else []
 
 
 def dep_name(entry):
@@ -185,7 +188,8 @@ def from_views(version, repo, branch):
 
 def files_from_views(text):
     """{package: fields} from a VIEWS file for what the repository serves beside
-    the tarball, as the legacy page read them: Rfiles (vignette R scripts),
+    the tarball, as the legacy page read them: vignettes, vignetteTitles,
+    Rfiles (vignette R scripts),
     hasNEWS/hasREADME/hasINSTALL/hasLICENSE (news/, readmes/, install/,
     licenses/) and Archs (the Windows binary's architectures). r-universe has
     no equivalent: an R script name can't be derived from the vignette (edgeR's
@@ -196,6 +200,13 @@ def files_from_views(text):
     for name, r in parse_dcf(text).items():
         rec = {k: r.get(k, "").strip().upper() == "TRUE"
                for k in ("hasNEWS", "hasREADME", "hasINSTALL", "hasLICENSE")}
+        # VIEWS wins over r-universe for vignettes, as on the legacy page: a
+        # package whose r-universe build failed lists none there while the
+        # repository still serves the last one Bioconductor built (bioc-infrastructure#108). A
+        # package VIEWS lists without vignettes gets none (empty list, so the
+        # r-universe value is replaced, not kept).
+        rec["vignettes"] = split_list(r.get("vignettes"))
+        rec["vignetteTitles"] = split_list(r.get("vignetteTitles"))
         if r.get("Rfiles"):
             rec["Rfiles"] = split_list(r["Rfiles"])
         if r.get("Archs"):
@@ -399,12 +410,16 @@ def main(argv=None):
     if args.software_origin == "runiverse":
         repos["bioc"] = software_only(
             repos["bioc"], [set(repos[r]) | set(from_views(args.bioc, r, branch)) for r in REPOS[1:]])
-        # Optional: without it the pages just show no R Script, README,
-        # INSTALL or LICENSE links, and NEWS as r-universe sees it.
-        if views := fetch(f"{SITE}/packages/{args.bioc}/bioc/VIEWS", optional=True):
+
+    # Optional: without it the pages just show no R Script, README, INSTALL or
+    # LICENSE links, NEWS as r-universe sees it, r-universe's vignettes for
+    # software and none for the other repositories (tarball DESCRIPTION has no
+    # vignette list).
+    for repo in REPOS:
+        if views := fetch(f"{SITE}/packages/{args.bioc}/{repo}/VIEWS", optional=True):
             for name, fields in files_from_views(views).items():
-                if name in repos["bioc"]:
-                    repos["bioc"][name].update(fields)
+                if name in repos[repo]:
+                    repos[repo][name].update(fields)
 
     # Source archives exist only for releases (devel has no Archive/) and only
     # for software, as on the legacy page. Optional: no field, no link.
