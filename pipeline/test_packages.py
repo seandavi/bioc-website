@@ -67,13 +67,23 @@ class FilesFromViews(unittest.TestCase):
         views = ("Package: edgeR\nvignettes: vignettes/edgeR/inst/doc/intro.html,\n"
                  "        vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf\n"
                  "Rfiles: vignettes/edgeR/inst/doc/intro.R\nhasREADME: FALSE\nhasNEWS: TRUE\n"
+                 "vignetteTitles: Introduction, edgeR User's Guide\n"
                  "Archs: x64\n\nPackage: limma\n")
         self.assertEqual(packages.files_from_views(views),
-                         {"edgeR": {"Rfiles": ["vignettes/edgeR/inst/doc/intro.R"], "hasREADME": False,
+                         {"edgeR": {"vignettes": ["vignettes/edgeR/inst/doc/intro.html",
+                                                  "vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf"],
+                                    "vignetteTitles": ["Introduction", "edgeR User's Guide"],
+                                    "Rfiles": ["vignettes/edgeR/inst/doc/intro.R"], "hasREADME": False,
                                     "hasNEWS": True, "hasINSTALL": False, "hasLICENSE": False,
                                     "Archs": "x64"},
-                          "limma": {"hasNEWS": False, "hasREADME": False, "hasINSTALL": False,
-                                    "hasLICENSE": False}})
+                          "limma": {"vignettes": [], "vignetteTitles": [], "hasNEWS": False,
+                                    "hasREADME": False, "hasINSTALL": False, "hasLICENSE": False}})
+
+
+    def test_doubled_comma_is_a_comma_inside_a_title(self):
+        views = "Package: BiocParallel\nvignetteTitles: 2. Intro, 3. Errors,, Logs\n  and Debugging\n"
+        self.assertEqual(packages.files_from_views(views)["BiocParallel"]["vignetteTitles"],
+                         ["2. Intro", "3. Errors, Logs and Debugging"])
 
 
 class ArchivedPackages(unittest.TestCase):
