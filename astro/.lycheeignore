@@ -13,3 +13,5 @@ www\.deduveinstitute\.be/fr/research/computational-biology/laurent-gatto
 /packages/3\.14/workflow/html/proteomics\.html
 journal\.r-project\.org/archive/2011-1/RJournal_2011-1_Wickham\.pdf
 www\.allthingsrss\.com/rss2email
+# Upstream TLS cert expired 2026-08-30; not ours to fix (#29)
+code\.bioconductor\.org
