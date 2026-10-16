@@ -30,7 +30,11 @@ def cmd_fetch_site(args):
     every hand-written page, and unrelated to the hosts being retired."""
     if os.path.isdir(os.path.join(SITE_REPO, ".git")):
         print("[fetch-site] updating %s" % SITE_REPO, file=sys.stderr)
-        subprocess.check_call(["git", "-C", SITE_REPO, "pull", "--ff-only", "--depth", "1"])
+        # Throwaway read-only snapshot: fetch + hard reset, because
+        # `pull --ff-only` on a shallow clone fails once upstream advances
+        # ("Not possible to fast-forward") -- there is no merge base.
+        subprocess.check_call(["git", "-C", SITE_REPO, "fetch", "--depth", "1", "origin", "devel"])
+        subprocess.check_call(["git", "-C", SITE_REPO, "reset", "--hard", "FETCH_HEAD"])
     else:
         os.makedirs(os.path.dirname(SITE_REPO), exist_ok=True)
         print("[fetch-site] cloning %s" % SITE_GIT, file=sys.stderr)
