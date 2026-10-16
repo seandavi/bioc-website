@@ -30,7 +30,10 @@ def cmd_fetch_site(args):
     every hand-written page, and unrelated to the hosts being retired."""
     if os.path.isdir(os.path.join(SITE_REPO, ".git")):
         print("[fetch-site] updating %s" % SITE_REPO, file=sys.stderr)
-        subprocess.check_call(["git", "-C", SITE_REPO, "pull", "--ff-only", "--depth", "1"])
+        # A read-only depth-1 mirror: the old and new tips share no visible history,
+        # so `pull --ff-only` refuses as soon as upstream moves. Fetch and reset.
+        subprocess.check_call(["git", "-C", SITE_REPO, "fetch", "--depth", "1", "origin"])
+        subprocess.check_call(["git", "-C", SITE_REPO, "reset", "--hard", "-q", "@{upstream}"])
     else:
         os.makedirs(os.path.dirname(SITE_REPO), exist_ok=True)
         print("[fetch-site] cloning %s" % SITE_GIT, file=sys.stderr)
