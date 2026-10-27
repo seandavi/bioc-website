@@ -51,9 +51,7 @@ for (const repo of reposFor(release)) {
   <script is:inline>
     window.addEventListener('DOMContentLoaded', () => {
       const params = new URLSearchParams(location.search);
-      // The vendored legacy JS "normalizes" trailing slashes onto the full
-      // URL, query string included ("?search-bar=limma/"); strip it.
-      const q = (params.get('search-bar') ?? params.get('q') ?? '').replace(/\/+$/, '');
+      const q = params.get('search-bar') ?? params.get('q') ?? '';
       // Unrecognized constructor options are forwarded to pagefind.options();
       // ranking here favors where a term appears (the weighted package-name
       // heading) over how often it appears, so the package "limma" outranks
