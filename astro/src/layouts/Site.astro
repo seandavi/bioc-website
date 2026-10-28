@@ -20,6 +20,7 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import { canonicalUrl } from '../lib/canonical.js';
 import '../styles/site-overrides.css';
+import bioconductorJs from '../scripts/bioconductor.js?url';
 
 // `canonical` is a path; it defaults to the page's own.
 const { title, description, fullwidth = false, bodyClass, canonical = Astro.url.pathname } = Astro.props;
@@ -42,9 +43,11 @@ const STYLES = [
   'pages/about.css', 'pages/packages.css', 'pages/orcid.css',
 ];
 
+// bioconductor.js is our fixed copy (src/scripts), emitted as a plain asset so
+// it still runs as a classic script in upstream's order; the rest are /js/.
 const SCRIPTS = [
-  'jquery.js', 'jquery.tools.min.js', 'bioconductor.js', 'jquery.corner.js',
-  'jquery.timeago.js', 'bioc-style.js', 'versions.js', 'sidebar.js',
+  '/js/jquery.js', '/js/jquery.tools.min.js', bioconductorJs, '/js/jquery.corner.js',
+  '/js/jquery.timeago.js', '/js/bioc-style.js', '/js/versions.js', '/js/sidebar.js',
 ];
 ---
 <!DOCTYPE html>
@@ -83,6 +86,6 @@ const SCRIPTS = [
       </div>
     </main>
     <Footer />
-    {SCRIPTS.map((s) => <script is:inline type="text/javascript" src={`/js/${s}`}></script>)}
+    {SCRIPTS.map((s) => <script is:inline type="text/javascript" src={s}></script>)}
   </body>
 </html>
