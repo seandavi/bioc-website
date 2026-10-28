@@ -94,7 +94,6 @@ jobs:
             --exclude 'packages/[0-9.]+/(bioc|data/annotation|data/experiment|workflows)/html/' \
             --exclude 'next/[^/]+/package/' \
             --exclude 'r-universe\.dev/articles/' \
-            --exclude '/developers/how-to/(git-mirrors|long-tests)' \
             --exclude 'contributions\.bioconductor\.org/long-tests' \
             --exclude 'twitter\.com|x\.com|linkedin\.com' \
             $(cat pages.txt) 2>&1 | tee links-report.txt
