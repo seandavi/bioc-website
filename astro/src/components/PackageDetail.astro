@@ -24,6 +24,13 @@ const vignetteTitles = asArray(pkg.vignetteTitles);
 // An R Script link only where the repository has the file: Rfiles lists them
 // (pipeline/packages.py, from VIEWS), as in the legacy doc_object() helper.
 const rfiles = new Set(asArray(pkg.Rfiles));
+// Sorted by lower-cased title like doc_object(): VIEWS lists vignettes by file
+// name, so authors number their titles ("1. ...") to set the reading order
+// (bioc-infrastructure#127).
+const byTitle = (a, b) => {
+  const [x, y] = [a.title.toLowerCase(), b.title.toLowerCase()];
+  return x < y ? -1 : x > y ? 1 : 0;
+};
 const docs = vignettes.map((v, i) => {
   const file = v.split('/').pop();
   const script = v.replace(/\.(html|pdf)$/i, '.R');
@@ -31,7 +38,7 @@ const docs = vignettes.map((v, i) => {
     file, title: vignetteTitles[i] ?? file, type: file.split('.').pop().toUpperCase(),
     script: script !== v && rfiles.has(script) ? script.split('/').pop() : null,
   };
-});
+}).sort(byTitle);
 // Build reports exist for software, experiment data and workflows, not for
 // annotation packages (verified: /checkResults/<ver>/data-annotation-LATEST/<pkg>/
 // is a 404 for every package). r-universe builds the same three kinds, but only
