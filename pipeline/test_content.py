@@ -34,3 +34,13 @@ class RenderPartial(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ErbDetection(unittest.TestCase):
+    def test_multiline_tag_is_erb(self):
+        from pipeline.content import ERB
+        self.assertTrue(ERB.search("<%= render('/_upcoming_events/', :events => x)\n%>"))
+
+    def test_r_operator_is_not_erb(self):
+        from pipeline.content import ERB
+        self.assertIsNone(ERB.search("- fully support of replace operator, %<% <2015-02-09, Mon>\n%<+% too"))

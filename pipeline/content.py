@@ -24,14 +24,14 @@ import sys
 
 import yaml
 
-# A real ERB tag: <% ... %> or <%= ... %>, on one line.
+# A real ERB tag: <% ... %> or <%= ... %>, which may span lines.
 #
-# Requiring the closing %> on the same line matters. Counting bare `<%` flags
-# R's `%<%` operator, which appears in package NEWS text -- it put a 6,973-line
-# release-notes page containing no ERB whatsoever into the "cannot render"
-# bucket. Every ERB tag in this content tree is single-line, so this is exact
-# rather than a heuristic.
-ERB = re.compile(r"<%[-=]?[^\n%]*%>")
+# R's `%<%` operator appears in package NEWS text and once put a 6,973-line
+# release-notes page containing no ERB into the "cannot render" bucket. The
+# lookbehind skips it: a tag never follows a `%`. An earlier version required
+# the closing %> on the same line instead, which missed /help/events/'s two
+# tags that wrap onto a second line, so that page shipped with its ERB showing.
+ERB = re.compile(r"(?<!%)<%[-=]?(?:[^%]|%(?!>))*?%>")
 
 # The two constructs that make up nearly all of the ERB actually used:
 # a config lookup (optionally chained with .sub) and a static partial include.
