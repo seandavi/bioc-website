@@ -67,8 +67,11 @@ if [[ -n ${DRY_RUN:-} ]]; then
   echo "DRY_RUN: built $new; not uploaded, no build dispatched"
 else
   rclone copyto "$new" "$SNAPSHOT"
+  # Both builders rebuild on the new snapshot; whichever has PUBLISH_LATEST
+  # on serves production (seandavi/bioc-website#84).
   gh workflow run site.yml -R seandavi/bioc-website --ref main
-  echo "snapshot $new uploaded; site build dispatched"
+  gh workflow run astro.yml -R seandavi/bioconductor.org --ref astro
+  echo "snapshot $new uploaded; site builds dispatched"
 fi
 
 find "$WORK/snapshots" -name 'site-data.*.tar.zst' -mtime +"$KEEP_DAYS" -delete

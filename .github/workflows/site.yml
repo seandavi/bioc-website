@@ -99,7 +99,14 @@ jobs:
           DEST="s3://bioc-site/site/$BUILD_ID"
           aws s3 sync $EP --no-progress astro/dist "$DEST" ||
             aws s3 sync $EP --no-progress astro/dist "$DEST"
-          echo -n "$BUILD_ID" | aws s3 cp $EP - s3://bioc-site/site/latest
+
+      # Production moves to the astro branch of seandavi/bioconductor.org
+      # (Bioconductor/bioconductor.org#443). Each repository writes site/latest
+      # only while its own PUBLISH_LATEST variable is 'true'; the switch, and
+      # its rollback, is flipping the two. Builds still publish either way.
+      - name: Point site/latest at this build
+        if: github.event_name != 'pull_request' && vars.PUBLISH_LATEST == 'true'
+        run: echo -n "$BUILD_ID" | aws s3 cp $EP - s3://bioc-site/site/latest
 
       - name: Comment preview URL
         if: github.event_name == 'pull_request'
