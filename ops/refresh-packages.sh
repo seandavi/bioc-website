@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Refresh the package data (data/<release>/) in the CI data snapshot for the
-# live releases, then rebuild the site. Run daily by
+# Refresh the package data (data/<release>/) in the CI data snapshot for every
+# version in it, then rebuild the site (both builders). Run daily by
 # ops/systemd/bioc-site-packages.timer; safe to run by hand.
 #
 #   ops/refresh-packages.sh             # refresh, check, upload, rebuild
@@ -19,8 +19,8 @@
 # $WORK/history and linked in beside the live releases.
 #
 # pipeline/refresh_check.py gates the upload: a drop of more than 2% in any
-# release/repository, or a record without since, DownloadRank or releases,
-# fails the run with nothing uploaded. So does any pipeline failure.
+# release/repository, or a record without since, DownloadRank or releases
+# (an ADD_RELEASE version included), fails the run with nothing uploaded. So does any pipeline failure.
 #
 # Every snapshot this replaces is kept under $WORK/snapshots, so any build
 # can be traced back to the exact data it was built from.

@@ -81,15 +81,23 @@ Concretely (`.github/workflows/site.yml`):
   cache keys on it: a refreshed snapshot on the same commit must get a new id,
   and re-running a build does not refresh cached pages. Retention of old builds is
   [#2](https://github.com/seandavi/bioconductor-website/issues/2).
-- **CI builds only the mutable surface** — prose pages, the live releases
-  (currently 3.23 and 3.24), and `/next/`. The frozen releases (2.5–3.22) are
+- **CI builds only the mutable surface** — prose pages, the versions in the
+  snapshot (3.23 and 3.24, and since 2026-11-24 3.25, the next devel), and
+  `/next/`. The frozen releases (2.5–3.22) are
   archival: the Worker serves them from the mirrored legacy content in R2, and
   their routes never flip to Astro builds. The renderer discovers releases
   from whatever is in `astro/data/`, so this is a property of the data
-  snapshot, not a code path.
+  snapshot, not a code path. It also takes the two newest as devel and
+  release, so with 3.25 in the snapshot this build labels 3.25 devel and 3.24
+  release. The production build (the `astro` branch of
+  [seandavi/bioconductor.org](https://github.com/seandavi/bioconductor.org/tree/astro))
+  takes the pair from `config.yaml` instead
+  ([seandavi/bioconductor.org#22](https://github.com/seandavi/bioconductor.org/pull/22)),
+  so until this renderer does the same, its builds are not a correct
+  fallback.
 - **Builds read a data snapshot**, not primary sources: CI pulls
-  `_ci/site-data.tar.zst` (live releases' `astro/data/` plus the copied
-  `astro/public/` assets).
+  `_ci/site-data.tar.zst` (each version's `astro/data/` plus the copied
+  `astro/public/` assets). The production build pulls the same snapshot.
 
   **Prose and assets refresh automatically.** `ops/refresh-content.sh`, run
   every 20 minutes by `ops/systemd/bioc-site-refresh.timer` on onclappc02,
@@ -103,19 +111,31 @@ Concretely (`.github/workflows/site.yml`):
   **Package data (`data/<release>`) refreshes daily.** `ops/refresh-packages.sh`,
   run at 06:00 UTC by `ops/systemd/bioc-site-packages.timer` on onclappc02,
   reruns `./bioc.py packages` and `./bioc.py tree` for each release already in
-  the snapshot, on top of the current snapshot. `since` ("In Bioconductor
+  the snapshot, on top of the current snapshot, then dispatches both builds:
+  this repo's `site.yml` and `astro.yml` on seandavi/bioconductor.org, which
+  serves production. Software data for a version comes from whichever
+  r-universe (`bioc` or `bioc-release`) serves that version's `BiocVersion`
+  (`universe_for()` in `pipeline/packages.py`); if neither does, it comes from
+  the source tarballs' `DESCRIPTION`, like the other three repositories. A
+  version not yet in `config.yaml`'s `r_ver_for_bioc_ver` gets its R version
+  from the repository's binary indexes (`r_version_for()`). `since` reads each
+  version's package list from the manifest repository's `RELEASE_x_y` branch
+  where it exists, and `devel` only for the newest version without one
+  (`manifest_lists()` in `pipeline/since.py`). `since` ("In Bioconductor
   since") and `releases` need every release from 2.5 on disk, so the script
   extracts the frozen 2.5–3.22 history from `_ci/site-data-full.tar.zst` once,
   into `/data/davsean/bioc-site-refresh/history`. Before uploading,
   `pipeline/refresh_check.py` compares the result with the snapshot it
   replaces: if any release/repository lost more than 2% of its packages, or
-  any record lacks `since`, `DownloadRank` or `releases`, the run fails and
-  nothing is uploaded. A pipeline error fails the run the same way. Both
+  any record lacks `since`, `DownloadRank` or `releases` (including a release
+  only in the new data), the run fails and nothing is uploaded. A pipeline error fails the run the same way. Both
   scripts take a lock on `/data/davsean/bioc-site-refresh/snapshot.lock` from
   download to upload, so neither overwrites the other's changes. To force a
   run, `systemctl --user start bioc-site-packages`; to try one without
-  uploading, `DRY_RUN=1 ops/refresh-packages.sh`. Adding or retiring a live
-  release (and moving the retired one into the history) is still by hand.
+  uploading, `DRY_RUN=1 ops/refresh-packages.sh`. To add a version (the next
+  devel, ahead of release day), `ADD_RELEASE=<v> ops/refresh-packages.sh`;
+  3.25 was added that way on 2026-11-24. Retiring one (and moving it into the
+  history) is still by hand.
 
   **Rolling back** either job: every replaced snapshot is kept for 90 days
   under `/data/davsean/bioc-site-refresh/snapshots`, named for the job that
@@ -126,6 +146,7 @@ Concretely (`.github/workflows/site.yml`):
   rclone copyto /data/davsean/bioc-site-refresh/snapshots/<file> \
     r2:bioc-site/_ci/site-data.tar.zst
   gh workflow run site.yml -R seandavi/bioc-website --ref main
+  gh workflow run astro.yml -R seandavi/bioconductor.org --ref astro
   ```
 
   Stop the timers first if the next run would undo the rollback.
