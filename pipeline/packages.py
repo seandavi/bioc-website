@@ -548,6 +548,8 @@ def main(argv=None):
             for field in REV.values():
                 if rev[name][field]:
                     rec[field] = sorted(rev[name][field], key=str.lower)
+                else:
+                    rec.pop(field, None)  # a record kept from the previous snapshot may carry one
             if name in ranks:
                 rec["DownloadRank"] = ranks[name]
             # Repository root term -- see ROOT_TERM. Sorted so the order does not
