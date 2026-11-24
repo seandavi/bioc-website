@@ -197,6 +197,18 @@ class Packaged(unittest.TestCase):
         with mock.patch("pipeline.packages.fetch", return_value=json.dumps(pkgs)):
             self.assertEqual(sorted(from_runiverse("bioc-release", "RELEASE_3_23")), ["limma", "runibic"])
 
+    def test_data_packages_left_on_the_old_branch_are_not_a_roll(self):
+        # Experiment-data builds may stay on RELEASE_3_23; software has all rolled.
+        pkgs = [{"Package": "limma", "Version": "4.0.0", "RemoteRef": "RELEASE_3_24"},
+                {"Package": "ALL", "Version": "1.52.0", "RemoteRef": "RELEASE_3_23",
+                 "biocViews": "ExperimentData, CancerData"},
+                {"Package": "runibic", "Version": "1.36.0"}]
+        previous = {"gone": {"Package": "gone", "Version": "1.0.0"}}
+        with mock.patch("pipeline.packages.fetch", return_value=json.dumps(pkgs)), \
+             contextlib.redirect_stderr(io.StringIO()):
+            out = from_runiverse("bioc-release", "RELEASE_3_24", previous)
+        self.assertEqual(sorted(out), ["limma", "runibic"])  # not rolling: no carry-over
+
     def test_devel_accepts_head(self):
         pkgs = [{"Package": "limma", "Version": "3.99.5", "RemoteRef": "HEAD"}]
         with mock.patch("pipeline.packages.fetch", return_value=json.dumps(pkgs)):

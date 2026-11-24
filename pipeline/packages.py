@@ -146,7 +146,11 @@ def from_runiverse(universe, branch, previous=None):
     pkgs = json.loads(fetch(f"https://{universe}.r-universe.dev/api/packages"))
     want = {"HEAD", "devel"} if branch == "devel" else {branch}
     out, kept, dropped = {}, 0, 0
-    rolling = any(p.get("RemoteRef") and p["RemoteRef"] not in want for p in pkgs)
+    # Software builds only: the universes also hold data and workflow packages
+    # (software_only() drops them below), and those needn't roll with the branch.
+    data_views = {"ExperimentData", "AnnotationData", "Workflow"}
+    rolling = any(p.get("RemoteRef") and p["RemoteRef"] not in want
+                  and not data_views & set(split_list(p.get("biocViews") or "")) for p in pkgs)
     for p in pkgs:
         name = p["Package"]
         # A failed build records no branch. Mid-roll it may be either version's,
