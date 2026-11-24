@@ -129,12 +129,29 @@ def universe_for(bioc):
     return None
 
 
-def from_runiverse(universe, branch):
-    """Software packages, from r-universe. A real origin."""
+def from_runiverse(universe, branch, previous=None):
+    """Software packages, from r-universe. A real origin.
+
+    Only records built from `branch` count. A universe rolls to the next
+    branch package by package over hours (2026-11-24: bioc-release was 2549
+    RELEASE_3_23 and 313 RELEASE_3_24 records), so a record from another
+    branch is the next version's, not this one's: the package keeps its
+    `previous` record (the snapshot being refreshed), or is left out.
+    Failed-build entries carry no RemoteRef and are kept, as before."""
     pkgs = json.loads(fetch(f"https://{universe}.r-universe.dev/api/packages"))
-    out = {}
+    want = {"HEAD", "devel"} if branch == "devel" else {branch}
+    out, kept, dropped = {}, 0, 0
     for p in pkgs:
         name = p["Package"]
+        if p.get("RemoteRef") and p["RemoteRef"] not in want:
+            # ponytail: yesterday's record as-is; refreshed fields (reverse deps,
+            # downloads) are recomputed below, the r-universe ones wait a day.
+            if previous and name in previous:
+                out[name] = previous[name]
+                kept += 1
+            else:
+                dropped += 1
+            continue
         rec = {"Package": name, "Version": p.get("Version")}
         for role in ("Depends", "Imports", "Suggests", "LinkingTo", "Enhances"):
             vals = [d["package"] + (f" ({d['version']})" if d.get("version") else "")
@@ -165,7 +182,19 @@ def from_runiverse(universe, branch):
         # Overridden by VIEWS (files_from_views) when it is available.
         rec["hasNEWS"] = any("NEWS" in a for a in assets)
         out[name] = rec
+    if kept or dropped:
+        print(f"  {kept + dropped} records from another branch than {branch}: "
+              f"{kept} kept from the previous snapshot, {dropped} left out", file=sys.stderr)
     return out
+
+
+def previous_records(out, bioc, repo):
+    """The packages.json this run replaces, or {} (a first build)."""
+    f = os.path.join(out, bioc, repo, "packages.json")
+    if not os.path.exists(f):
+        return {}
+    with open(f, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 def software_only(bioc, others):
@@ -410,7 +439,7 @@ def main(argv=None):
     for repo in REPOS:
         if repo == "bioc" and args.software_origin == "runiverse":
             print(f"[{repo}] origin: r-universe ({args.universe})", file=sys.stderr)
-            repos[repo] = from_runiverse(args.universe, branch)
+            repos[repo] = from_runiverse(args.universe, branch, previous_records(args.out, args.bioc, repo))
             provenance[repo] = f"r-universe:{args.universe}"
         elif args.data_origin == "tarballs":
             # DESCRIPTION inside the source tarball -- the maintainer's own file,
@@ -519,6 +548,8 @@ def main(argv=None):
             for field in REV.values():
                 if rev[name][field]:
                     rec[field] = sorted(rev[name][field], key=str.lower)
+                else:
+                    rec.pop(field, None)  # a record kept from the previous snapshot may carry one
             if name in ranks:
                 rec["DownloadRank"] = ranks[name]
             # Repository root term -- see ROOT_TERM. Sorted so the order does not

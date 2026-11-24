@@ -1,3 +1,5 @@
+import contextlib
+import io
 """python3 -m unittest discover -s pipeline -p 'test_*.py'"""
 import json
 import os
@@ -172,6 +174,25 @@ class Packaged(unittest.TestCase):
             rec = from_runiverse("bioc-release", "RELEASE_3_23")["limma"]
         self.assertEqual(rec["Updated"], "2026-08-09")
         self.assertNotIn("Packaged", rec)
+
+    def test_records_from_another_branch_keep_the_previous_record(self):
+        # Mid-roll: bioc-release holds RELEASE_3_23 and RELEASE_3_24 builds at once.
+        pkgs = [{"Package": "limma", "Version": "3.68.5", "RemoteRef": "RELEASE_3_23"},
+                {"Package": "ACME", "Version": "2.70.0", "RemoteRef": "RELEASE_3_24"},
+                {"Package": "newpkg", "Version": "1.0.0", "RemoteRef": "RELEASE_3_24"},
+                {"Package": "runibic", "Version": "1.0.0"}]  # failed build: no RemoteRef
+        previous = {"ACME": {"Package": "ACME", "Version": "2.68.0"}}
+        with mock.patch("pipeline.packages.fetch", return_value=json.dumps(pkgs)), \
+             contextlib.redirect_stderr(io.StringIO()):
+            out = from_runiverse("bioc-release", "RELEASE_3_23", previous)
+        self.assertEqual(sorted(out), ["ACME", "limma", "runibic"])
+        self.assertEqual(out["ACME"], previous["ACME"])
+        self.assertEqual(out["limma"]["Version"], "3.68.5")
+
+    def test_devel_accepts_head(self):
+        pkgs = [{"Package": "limma", "Version": "3.99.5", "RemoteRef": "HEAD"}]
+        with mock.patch("pipeline.packages.fetch", return_value=json.dumps(pkgs)):
+            self.assertIn("limma", from_runiverse("bioc", "devel"))
 
     def test_dropped_when_the_version_shown_is_not_the_one_it_dates(self):
         idx = {"source.ver": {"CelliD": "1.19.0", "limma": "3.68.5"}, "win.binary.ver": {},
