@@ -181,13 +181,33 @@ class Packaged(unittest.TestCase):
                 {"Package": "ACME", "Version": "2.70.0", "RemoteRef": "RELEASE_3_24"},
                 {"Package": "newpkg", "Version": "1.0.0", "RemoteRef": "RELEASE_3_24"},
                 {"Package": "runibic", "Version": "1.0.0"}]  # failed build: no RemoteRef
-        previous = {"ACME": {"Package": "ACME", "Version": "2.68.0"}}
+        previous = {"ACME": {"Package": "ACME", "Version": "2.68.0"},
+                    "newin324": {"Package": "newin324", "Version": "0.99.1"}}  # not in the universe yet
         with mock.patch("pipeline.packages.fetch", return_value=json.dumps(pkgs)), \
              contextlib.redirect_stderr(io.StringIO()):
             out = from_runiverse("bioc-release", "RELEASE_3_23", previous)
-        self.assertEqual(sorted(out), ["ACME", "limma", "runibic"])
+        # Mid-roll, the failed build (no branch) waits: it has no previous record.
+        self.assertEqual(sorted(out), ["ACME", "limma", "newin324"])
         self.assertEqual(out["ACME"], previous["ACME"])
         self.assertEqual(out["limma"]["Version"], "3.68.5")
+
+    def test_failed_builds_are_kept_when_the_universe_is_on_one_branch(self):
+        pkgs = [{"Package": "limma", "Version": "3.68.5", "RemoteRef": "RELEASE_3_23"},
+                {"Package": "runibic", "Version": "1.36.0"}]
+        with mock.patch("pipeline.packages.fetch", return_value=json.dumps(pkgs)):
+            self.assertEqual(sorted(from_runiverse("bioc-release", "RELEASE_3_23")), ["limma", "runibic"])
+
+    def test_data_packages_left_on_the_old_branch_are_not_a_roll(self):
+        # Experiment-data builds may stay on RELEASE_3_23; software has all rolled.
+        pkgs = [{"Package": "limma", "Version": "4.0.0", "RemoteRef": "RELEASE_3_24"},
+                {"Package": "ALL", "Version": "1.52.0", "RemoteRef": "RELEASE_3_23",
+                 "biocViews": "ExperimentData, CancerData"},
+                {"Package": "runibic", "Version": "1.36.0"}]
+        previous = {"gone": {"Package": "gone", "Version": "1.0.0"}}
+        with mock.patch("pipeline.packages.fetch", return_value=json.dumps(pkgs)), \
+             contextlib.redirect_stderr(io.StringIO()):
+            out = from_runiverse("bioc-release", "RELEASE_3_24", previous)
+        self.assertEqual(sorted(out), ["limma", "runibic"])  # not rolling: no carry-over
 
     def test_devel_accepts_head(self):
         pkgs = [{"Package": "limma", "Version": "3.99.5", "RemoteRef": "HEAD"}]

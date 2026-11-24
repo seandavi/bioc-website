@@ -115,18 +115,23 @@ def dep_name(entry):
 # ---------------------------------------------------------------- origins ---
 
 def universe_for(bioc):
-    """The r-universe building this Bioconductor version, or None.
+    """(universe, branch) building this Bioconductor version, or (None, None).
 
-    Asked, not configured: each universe's BiocVersion says which version it
-    builds, and around a release the two move on r-universe's schedule, not the
-    site's (2026-11-24: bioc already on 3.25, bioc-release still on 3.23, with
-    the site's config.yaml at 3.23/3.24)."""
-    for universe in ("bioc", "bioc-release"):
-        text = fetch(f"https://{universe}.r-universe.dev/api/packages/BiocVersion", optional=True)
-        version = (json.loads(text) if text else {}).get("Version", "")
-        if version.split(".")[:2] == bioc.split("."):
-            return universe
-    return None
+    Decided by branch, not by any one package: a universe rolls to the next
+    branch package by package over hours (2026-11-24: bioc-release held 2,549
+    RELEASE_3_23 and 318 RELEASE_3_24 builds, its BiocVersion still 3.23), so
+    a version takes the universe that has builds from its RELEASE_x_y branch.
+    A version with no release branch yet is devel: `bioc` (git HEAD), if
+    that universe's BiocVersion is this version."""
+    branch = "RELEASE_" + bioc.replace(".", "_")
+    for universe in ("bioc-release", "bioc"):
+        text = fetch(f"https://{universe}.r-universe.dev/api/packages?fields=RemoteRef&limit=10000", optional=True)
+        if text and any(p.get("RemoteRef") == branch for p in json.loads(text)):
+            return universe, branch
+    text = fetch("https://bioc.r-universe.dev/api/packages/BiocVersion", optional=True)
+    if (json.loads(text) if text else {}).get("Version", "").split(".")[:2] == bioc.split("."):
+        return "bioc", "devel"
+    return None, None
 
 
 def from_runiverse(universe, branch, previous=None):
@@ -141,8 +146,22 @@ def from_runiverse(universe, branch, previous=None):
     pkgs = json.loads(fetch(f"https://{universe}.r-universe.dev/api/packages"))
     want = {"HEAD", "devel"} if branch == "devel" else {branch}
     out, kept, dropped = {}, 0, 0
+    # Software builds only: the universes also hold data and workflow packages
+    # (software_only() drops them below), and those needn't roll with the branch.
+    data_views = {"ExperimentData", "AnnotationData", "Workflow"}
+    rolling = any(p.get("RemoteRef") and p["RemoteRef"] not in want
+                  and not data_views & set(split_list(p.get("biocViews") or "")) for p in pkgs)
     for p in pkgs:
         name = p["Package"]
+        # A failed build records no branch. Mid-roll it may be either version's,
+        # so it keeps the package's previous record, and a new one waits.
+        if not p.get("RemoteRef") and rolling:
+            if previous and name in previous:
+                out[name] = previous[name]
+                kept += 1
+            else:
+                dropped += 1
+            continue
         if p.get("RemoteRef") and p["RemoteRef"] not in want:
             # ponytail: yesterday's record as-is; refreshed fields (reverse deps,
             # downloads) are recomputed below, the r-universe ones wait a day.
@@ -182,6 +201,13 @@ def from_runiverse(universe, branch, previous=None):
         # Overridden by VIEWS (files_from_views) when it is available.
         rec["hasNEWS"] = any("NEWS" in a for a in assets)
         out[name] = rec
+    if rolling and previous:
+        # Mid-roll the universe isn't the whole version: a package the next
+        # branch added (new in that cycle) isn't in it until it is rebuilt.
+        seen = {p["Package"] for p in pkgs}
+        for name in previous.keys() - seen:
+            out[name] = previous[name]
+            kept += 1
     if kept or dropped:
         print(f"  {kept + dropped} records from another branch than {branch}: "
               f"{kept} kept from the previous snapshot, {dropped} left out", file=sys.stderr)
@@ -410,8 +436,9 @@ def main(argv=None):
     ap.add_argument("--out", default="./out")
     ap.add_argument("--universe", default=None,
                     help="r-universe to read software metadata from; default: "
-                         "whichever one's BiocVersion is --bioc, else none (software "
-                         "then follows --data-origin)")
+                         "the one with builds from --bioc's RELEASE branch, else bioc "
+                         "if its BiocVersion is --bioc, else none (software then follows "
+                         "--data-origin)")
     ap.add_argument("--software-origin", choices=["runiverse", "views"], default="runiverse")
     ap.add_argument("--data-origin", choices=["tarballs", "views"], default="tarballs",
                     help="origin for annotation/experiment/workflows metadata. "
@@ -421,8 +448,9 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     cfg = repo_config()
+    branch = None
     if args.universe is None:
-        args.universe = universe_for(args.bioc)
+        args.universe, branch = universe_for(args.bioc)
         if args.universe is None and args.software_origin == "runiverse":
             # Software then takes the --data-origin path, like the other three
             # repositories: tarball DESCRIPTION by default.
@@ -433,12 +461,12 @@ def main(argv=None):
         sys.exit(f"config.yaml has no r_ver_for_bioc_ver for {args.bioc}, and no R binaries were found for it")
     # since.record reads the map too; give it the R found for an unlisted version.
     cfg.setdefault("r_ver_for_bioc_ver", {})[args.bioc] = rver
-    branch = "devel" if args.universe == "bioc" else "RELEASE_" + args.bioc.replace(".", "_")
+    branch = branch or ("devel" if args.universe == "bioc" else "RELEASE_" + args.bioc.replace(".", "_"))
     provenance, repos, tarball_reports = {}, {}, []
 
     for repo in REPOS:
         if repo == "bioc" and args.software_origin == "runiverse":
-            print(f"[{repo}] origin: r-universe ({args.universe})", file=sys.stderr)
+            print(f"[{repo}] origin: r-universe ({args.universe}, {branch})", file=sys.stderr)
             repos[repo] = from_runiverse(args.universe, branch, previous_records(args.out, args.bioc, repo))
             provenance[repo] = f"r-universe:{args.universe}"
         elif args.data_origin == "tarballs":
