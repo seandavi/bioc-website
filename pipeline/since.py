@@ -69,22 +69,30 @@ def releases(where, version, repo):
     return [[v, merged[v]] for v in sorted(merged, key=version_key, reverse=True)]
 
 
-def manifest_lists(cfg, url=MANIFEST):
+def manifest_lists(cfg, url=MANIFEST, also=()):
     """{release: software.txt} for every release in config.yaml's release_dates
-    plus devel, read from one shallow clone of the manifest repo. A release
-    with no branch (before 1.6) is left out, as the legacy Rules file did."""
-    devel = str(cfg.get("devel_version"))
-    branches = {v: "devel" if v == devel else "RELEASE_" + v.replace(".", "_")
-                for v in [*(cfg.get("release_dates") or {}), devel]}
+    plus devel (and `also`), read from one shallow clone of the manifest repo.
+    A release with no branch (before 1.6) is left out, as the legacy Rules
+    file did.
+
+    A version reads its RELEASE_x_y branch where one exists, and only the
+    newest version without one reads `devel`. Around a release the git branch
+    comes before the site's config.yaml edit (2026-11-24: RELEASE_3_24 cut,
+    devel already 3.25, config.yaml devel_version still 3.24), so mapping
+    `devel` to devel_version would date 3.25's new packages to 3.24."""
+    versions = sorted({*map(str, cfg.get("release_dates") or {}), str(cfg.get("devel_version")), *also},
+                      key=version_key)
     with tempfile.TemporaryDirectory() as d:
         subprocess.run(["git", "clone", "-q", "--bare", "--depth", "1", "--no-single-branch", url, d],
                        check=True)
         out = {}
-        for v, branch in branches.items():
-            r = subprocess.run(["git", "-C", d, "show", f"{branch}:software.txt"],
-                               capture_output=True, text=True)
-            if r.returncode == 0:
-                out[v] = r.stdout
+        for v in versions:
+            for branch in ["RELEASE_" + v.replace(".", "_")] + (["devel"] if v == versions[-1] else []):
+                r = subprocess.run(["git", "-C", d, "show", f"{branch}:software.txt"],
+                                   capture_output=True, text=True)
+                if r.returncode == 0:
+                    out[v] = r.stdout
+                    break
         return out
 
 

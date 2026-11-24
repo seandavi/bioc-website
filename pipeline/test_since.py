@@ -133,6 +133,15 @@ class Manifest(unittest.TestCase):
             cfg = {"devel_version": "3.24", "release_dates": {"1.5": "x", "1.6": "x"}}
             self.assertEqual(manifest_lists(cfg, url=f"file://{d}"),
                              {"1.6": "Package: old\n", "3.24": "Package: new\n"})
+            # Mid-roll: RELEASE_3_24 cut, devel moved on to 3.25, config.yaml not yet.
+            git("checkout", "-q", "-B", "RELEASE_3_24")
+            with open(f"{d}/software.txt", "w") as fh:
+                fh.write("Package: rel\n")
+            git("commit", "-q", "-am", "RELEASE_3_24")
+            self.assertEqual(manifest_lists(cfg, url=f"file://{d}"),
+                             {"1.6": "Package: old\n", "3.24": "Package: rel\n"})
+            self.assertEqual(manifest_lists(cfg, url=f"file://{d}", also=("3.25",)),
+                             {"1.6": "Package: old\n", "3.24": "Package: rel\n", "3.25": "Package: new\n"})
 
 
 class Packaged(unittest.TestCase):

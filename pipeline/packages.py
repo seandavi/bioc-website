@@ -381,7 +381,8 @@ def main(argv=None):
     ap.add_argument("--out", default="./out")
     ap.add_argument("--universe", default=None,
                     help="r-universe to read software metadata from; default: "
-                         "whichever one's BiocVersion is --bioc, else VIEWS")
+                         "whichever one's BiocVersion is --bioc, else none (software "
+                         "then follows --data-origin)")
     ap.add_argument("--software-origin", choices=["runiverse", "views"], default="runiverse")
     ap.add_argument("--data-origin", choices=["tarballs", "views"], default="tarballs",
                     help="origin for annotation/experiment/workflows metadata. "
@@ -394,7 +395,9 @@ def main(argv=None):
     if args.universe is None:
         args.universe = universe_for(args.bioc)
         if args.universe is None and args.software_origin == "runiverse":
-            print(f"no r-universe builds {args.bioc}; software from VIEWS", file=sys.stderr)
+            # Software then takes the --data-origin path, like the other three
+            # repositories: tarball DESCRIPTION by default.
+            print(f"no r-universe builds {args.bioc}; software from --data-origin {args.data_origin}", file=sys.stderr)
             args.software_origin = "views"
     rver = str((cfg.get("r_ver_for_bioc_ver") or {}).get(args.bioc) or "") or r_version_for(args.bioc, cfg)
     if not rver:
@@ -496,7 +499,7 @@ def main(argv=None):
 
     # "since" for anything ever in the manifest's software.txt, as the legacy
     # site had it; the history on disk only for the rest.
-    software_first = since.manifest_first(since.manifest_lists(cfg))
+    software_first = since.manifest_first(since.manifest_lists(cfg, also=(args.bioc,)))
     # First release and release list per package, from the releases already on
     # disk. If any release from 2.5 up to this one is missing, "first seen" and
     # the list are wrong, so both fields are left out, loudly.
