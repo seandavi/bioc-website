@@ -107,3 +107,42 @@ class RankByScore(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UniverseFor(unittest.TestCase):
+    def test_picks_the_universe_whose_biocversion_matches(self):
+        # 2026-11-24, mid-roll: bioc on 3.25, bioc-release still on 3.23.
+        served = {"bioc": "3.25.0", "bioc-release": "3.23.1"}
+        def fake(url, optional=False):
+            return '{"Version": "%s"}' % served[url.split("//")[1].split(".")[0]]
+        orig, packages.fetch = packages.fetch, fake
+        try:
+            self.assertEqual(packages.universe_for("3.25"), "bioc")
+            self.assertEqual(packages.universe_for("3.23"), "bioc-release")
+            self.assertIsNone(packages.universe_for("3.24"))
+            self.assertIsNone(packages.universe_for("3.2"))  # 3.2 is not 3.25's prefix
+        finally:
+            packages.fetch = orig
+
+    def test_an_unreachable_universe_is_none(self):
+        orig, packages.fetch = packages.fetch, lambda url, optional=False: None
+        try:
+            self.assertIsNone(packages.universe_for("3.24"))
+        finally:
+            packages.fetch = orig
+
+
+class RVersionFor(unittest.TestCase):
+    def test_finds_the_r_the_repository_has_binaries_for(self):
+        cfg = {"r_ver_for_bioc_ver": {"3.23": "4.6", "3.24": "4.6"}}
+        seen = []
+        def fake(url, optional=False):
+            seen.append(url)
+            return "" if "/3.25/bioc/bin/windows/contrib/4.7/" in url else None  # empty, as on 2026-11-24
+        orig, packages.fetch = packages.fetch, fake
+        try:
+            self.assertEqual(packages.r_version_for("3.25", cfg, mirror="m"), "4.7")
+            self.assertEqual(packages.r_version_for("3.26", cfg, mirror="m"), "")
+            self.assertEqual(packages.r_version_for("3.25", {}, mirror="m"), "")
+        finally:
+            packages.fetch = orig

@@ -6,9 +6,13 @@
 #
 #   ops/refresh-packages.sh             # refresh, check, upload, rebuild
 #   DRY_RUN=1 ops/refresh-packages.sh   # everything but the upload and dispatch
+#   ADD_RELEASE=3.25 ops/refresh-packages.sh   # also build a release not in it yet
 #
 # The live releases are the data/<release> directories already in the
-# snapshot; adding or retiring one at a release is still done by hand.
+# snapshot. ADD_RELEASE adds one (the next devel, ahead of release day); from
+# then on it is in the snapshot and every run refreshes it. Which of them are
+# release and devel is config.yaml's call, not this script's. Retiring one is
+# still done by hand.
 # data/site and public are carried over untouched (ops/refresh-content.sh
 # owns them). `since` and `releases` need every release from 2.5 on disk, so
 # the frozen history (2.5-3.22) is extracted once from site-data-full into
@@ -41,6 +45,10 @@ prev=$WORK/snapshots/site-data.$ts.packages.prev.tar.zst
 rclone copyto "$SNAPSHOT" "$prev"
 zstd -dcq "$prev" | tar -C "$run/new" -xf -
 live=$(cd "$run/new" && ls -d data/[0-9]* | sort -V)
+if [[ -n ${ADD_RELEASE:-} ]]; then
+  [[ $ADD_RELEASE =~ ^[0-9]+\.[0-9]+$ ]] || { echo "ADD_RELEASE=$ADD_RELEASE is not a version" >&2; exit 1; }
+  [[ ! -e $run/new/data/$ADD_RELEASE ]] || { echo "data/$ADD_RELEASE is already in the snapshot" >&2; exit 1; }
+fi
 cp -a "$run/new/data" "$run/old"
 
 hist=$WORK/history
@@ -54,8 +62,15 @@ fi
 # ln fails, aborting the run, if a history release is also live.
 ln -s "$hist"/* "$run/new/data/"
 
-# In version order: a release's `releases` lists read the other releases on disk.
+# The added release first, so the live ones' `releases` lists include it; then
+# in version order, since a release's `releases` lists read the others on disk.
+if [[ -n ${ADD_RELEASE:-} ]]; then
+  ./bioc.py packages --bioc "$ADD_RELEASE" --out "$run/new/data"
+  ./bioc.py tree --bioc "$ADD_RELEASE" --out "$run/new/data"
+  live=$(printf '%s\n' $live "data/$ADD_RELEASE" | sort -V)
+fi
 for d in $live; do
+  [[ $d == "data/${ADD_RELEASE:-}" ]] && continue
   ./bioc.py packages --bioc "${d#data/}" --out "$run/new/data"
   ./bioc.py tree --bioc "${d#data/}" --out "$run/new/data"
 done

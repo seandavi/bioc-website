@@ -92,6 +92,10 @@ class Record(unittest.TestCase):
     def test_devel_has_no_date_yet(self):
         self.assertEqual(record("3.24", CFG), {"release": "3.24", "r": "4.6"})
 
+    def test_the_next_devel_built_ahead_of_release_day_has_no_date_either(self):
+        cfg = {**CFG, "r_ver_for_bioc_ver": {**CFG["r_ver_for_bioc_ver"], "3.25": "4.7"}}
+        self.assertEqual(record("3.25", cfg), {"release": "3.25", "r": "4.7"})
+
     def test_a_release_missing_from_config_is_an_error(self):
         with self.assertRaises(SystemExit):
             record("3.0", CFG)  # no R version
@@ -129,6 +133,15 @@ class Manifest(unittest.TestCase):
             cfg = {"devel_version": "3.24", "release_dates": {"1.5": "x", "1.6": "x"}}
             self.assertEqual(manifest_lists(cfg, url=f"file://{d}"),
                              {"1.6": "Package: old\n", "3.24": "Package: new\n"})
+            # Mid-roll: RELEASE_3_24 cut, devel moved on to 3.25, config.yaml not yet.
+            git("checkout", "-q", "-B", "RELEASE_3_24")
+            with open(f"{d}/software.txt", "w") as fh:
+                fh.write("Package: rel\n")
+            git("commit", "-q", "-am", "RELEASE_3_24")
+            self.assertEqual(manifest_lists(cfg, url=f"file://{d}"),
+                             {"1.6": "Package: old\n", "3.24": "Package: rel\n"})
+            self.assertEqual(manifest_lists(cfg, url=f"file://{d}", also=("3.25",)),
+                             {"1.6": "Package: old\n", "3.24": "Package: rel\n", "3.25": "Package: new\n"})
 
 
 class Packaged(unittest.TestCase):

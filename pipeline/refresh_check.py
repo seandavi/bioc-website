@@ -30,12 +30,18 @@ def load(data_dir, version, repo):
 def problems(old, new):
     """Why NEW must not replace OLD, one line each; empty when it may. Prints counts."""
     out = []
-    versions = sorted((d for d in os.listdir(old) if re.fullmatch(r"\d+\.\d+", d)), key=version_key)
+    def releases(d):
+        return {v for v in os.listdir(d) if re.fullmatch(r"\d+\.\d+", v)}
+    before = releases(old)
+    # Every release in OLD must still be in NEW. One only in NEW (ADD_RELEASE)
+    # has nothing to drop from, but its records still need every field.
+    versions = sorted(before | {v for v in releases(new) if not os.path.islink(os.path.join(new, v))},
+                      key=version_key)
     for v in versions:
         for repo in REPOS:
-            a, b = load(old, v, repo), load(new, v, repo)
-            print(f"  {v} {repo:<16} {len(a):>5} -> {len(b):>5}", file=sys.stderr)
-            if len(b) < (1 - MAX_DROP) * len(a):
+            a, b = (load(old, v, repo) if v in before else None), load(new, v, repo)
+            print(f"  {v} {repo:<16} {len(a) if a is not None else '(new)':>5} -> {len(b):>5}", file=sys.stderr)
+            if a is not None and len(b) < (1 - MAX_DROP) * len(a):
                 out.append(f"{v}/{repo}: {len(a)} -> {len(b)} packages, "
                            f"more than {MAX_DROP:.0%} fewer")
             for field in FIELDS:

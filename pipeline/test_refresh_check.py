@@ -48,6 +48,18 @@ class RefreshCheck(unittest.TestCase):
         self.assertEqual(len(check(self.old, self.new)), len(REPOS))
         self.assertIn("3.24/bioc: 100 of 100 records without DownloadRank", check(self.old, self.new))
 
+    def test_an_added_release_is_checked_for_fields_but_not_drops(self):
+        write(self.new, "3.24", {})
+        write(self.new, "3.25", {"bioc": 1}, rec={"since": {}, "releases": []})  # ADD_RELEASE
+        self.assertIn("3.25/bioc: 1 of 1 records without DownloadRank", check(self.old, self.new))
+        self.assertFalse(any("fewer" in p for p in check(self.old, self.new)))
+
+    def test_symlinked_history_releases_are_not_checked(self):
+        write(self.new, "3.24", {})
+        write(f"{self.tmp.name}/history", "3.1", {}, rec={})
+        os.symlink(f"{self.tmp.name}/history/3.1", f"{self.new}/3.1")
+        self.assertEqual(check(self.old, self.new), [])
+
     def test_a_release_missing_from_the_new_data_fails(self):
         with self.assertRaises(FileNotFoundError):
             check(self.old, self.new)
