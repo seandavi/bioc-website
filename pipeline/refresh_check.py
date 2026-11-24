@@ -3,8 +3,8 @@
     python3 -m pipeline.refresh_check OLD NEW
 
 OLD and NEW are data directories holding <release>/<repo>/packages.json: OLD
-from the snapshot being replaced, NEW just built. Every release in OLD is
-checked, per repository. Exits non-zero, listing why, when NEW has more than
+from the snapshot being replaced, NEW just built. Every release in OLD, and
+any only in NEW (ADD_RELEASE), is checked, per repository. Exits non-zero, listing why, when NEW has more than
 MAX_DROP fewer packages, or a record lacks a field the landing pages need.
 Both are how an input that moved or came back empty shows up
 (bioc-infrastructure#103): the pipeline writes the records without it rather

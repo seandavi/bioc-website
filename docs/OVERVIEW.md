@@ -270,8 +270,8 @@ Operationally:
   a sticky comment. That build is byte-for-byte what production would serve.
 - **Every merge to `main`** publishes an immutable `site/<sha>/` and moves the
   `site/latest` pointer.
-- **CI builds only the mutable surface** — prose, the live releases (3.23,
-  3.24), and `/next/`. Releases 2.5–3.22 are archival: the Worker serves them
+- **CI builds only the mutable surface** — prose, the versions in the data
+  snapshot (3.23, 3.24 and, since 2026-11-24, 3.25), and `/next/`. Releases 2.5–3.22 are archival: the Worker serves them
   from mirrored content and those routes never flip. The renderer discovers
   releases from whatever is in `astro/data/`, so this is a property of the data
   snapshot, not a code path.
