@@ -1,4 +1,5 @@
 """python3 -m unittest discover -s pipeline -p 'test_*.py'"""
+import json
 import unittest
 from pipeline import packages
 
@@ -110,24 +111,36 @@ if __name__ == "__main__":
 
 
 class UniverseFor(unittest.TestCase):
-    def test_picks_the_universe_whose_biocversion_matches(self):
-        # 2026-11-24, mid-roll: bioc on 3.25, bioc-release still on 3.23.
-        served = {"bioc": "3.25.0", "bioc-release": "3.23.1"}
+    def check(self, refs, biocversion, cases):
+        """refs: universe -> RemoteRefs of its builds; biocversion: bioc's BiocVersion."""
         def fake(url, optional=False):
-            return '{"Version": "%s"}' % served[url.split("//")[1].split(".")[0]]
+            universe = url.split("//")[1].split(".")[0]
+            if url.endswith("/BiocVersion"):
+                return '{"Version": "%s"}' % biocversion if universe == "bioc" else None
+            return json.dumps([{"Package": f"p{i}", "RemoteRef": r} for i, r in enumerate(refs[universe])])
         orig, packages.fetch = packages.fetch, fake
         try:
-            self.assertEqual(packages.universe_for("3.25"), "bioc")
-            self.assertEqual(packages.universe_for("3.23"), "bioc-release")
-            self.assertIsNone(packages.universe_for("3.24"))
-            self.assertIsNone(packages.universe_for("3.2"))  # 3.2 is not 3.25's prefix
+            for bioc, want in cases.items():
+                self.assertEqual(packages.universe_for(bioc), want, bioc)
         finally:
             packages.fetch = orig
+
+    def test_mid_roll_both_branches_read_bioc_release(self):
+        # 2026-11-24 18:00 UTC: bioc-release rebuilding from RELEASE_3_24, bioc on 3.25.
+        self.check({"bioc-release": ["RELEASE_3_23", "RELEASE_3_24", None], "bioc": ["HEAD"]}, "3.25.0",
+                   {"3.23": ("bioc-release", "RELEASE_3_23"), "3.24": ("bioc-release", "RELEASE_3_24"),
+                    "3.25": ("bioc", "devel"), "3.2": (None, None)})
+
+    def test_quiet_day_and_just_after_the_branch_is_cut(self):
+        quiet = {"bioc-release": ["RELEASE_3_23"], "bioc": ["HEAD"]}
+        self.check(quiet, "3.24.0", {"3.23": ("bioc-release", "RELEASE_3_23"), "3.24": ("bioc", "devel")})
+        # RELEASE_3_24 cut, bioc already 3.25, bioc-release not started: 3.24 has no universe.
+        self.check(quiet, "3.25.0", {"3.24": (None, None), "3.25": ("bioc", "devel")})
 
     def test_an_unreachable_universe_is_none(self):
         orig, packages.fetch = packages.fetch, lambda url, optional=False: None
         try:
-            self.assertIsNone(packages.universe_for("3.24"))
+            self.assertEqual(packages.universe_for("3.24"), (None, None))
         finally:
             packages.fetch = orig
 
