@@ -103,7 +103,8 @@ def record(version, cfg, earliest=EARLIEST):
     the oldest release of the history it was read from.
 
     No R version is an error. No release date is an error too, except for the
-    devel version, which has not been released yet."""
+    devel version and any built ahead of it (the next devel, before release
+    day), which have not been released yet."""
     rver = (cfg.get("r_ver_for_bioc_ver") or {}).get(version)
     if not rver:
         raise SystemExit(f"config.yaml has no r_ver_for_bioc_ver for {version}")
@@ -111,7 +112,7 @@ def record(version, cfg, earliest=EARLIEST):
     date = (cfg.get("release_dates") or {}).get(version)
     if date:
         rec["date"] = datetime.datetime.strptime(date, "%m/%d/%Y").date().isoformat()
-    elif version != str(cfg.get("devel_version")):
+    elif version_key(version) < version_key(str(cfg.get("devel_version"))):
         raise SystemExit(f"config.yaml has no release_dates for {version}")
     if version == earliest:
         rec["orEarlier"] = True

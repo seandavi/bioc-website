@@ -92,6 +92,10 @@ class Record(unittest.TestCase):
     def test_devel_has_no_date_yet(self):
         self.assertEqual(record("3.24", CFG), {"release": "3.24", "r": "4.6"})
 
+    def test_the_next_devel_built_ahead_of_release_day_has_no_date_either(self):
+        cfg = {**CFG, "r_ver_for_bioc_ver": {**CFG["r_ver_for_bioc_ver"], "3.25": "4.7"}}
+        self.assertEqual(record("3.25", cfg), {"release": "3.25", "r": "4.7"})
+
     def test_a_release_missing_from_config_is_an_error(self):
         with self.assertRaises(SystemExit):
             record("3.0", CFG)  # no R version

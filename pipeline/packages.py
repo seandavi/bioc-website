@@ -114,6 +114,21 @@ def dep_name(entry):
 
 # ---------------------------------------------------------------- origins ---
 
+def universe_for(bioc):
+    """The r-universe building this Bioconductor version, or None.
+
+    Asked, not configured: each universe's BiocVersion says which version it
+    builds, and around a release the two move on r-universe's schedule, not the
+    site's (2026-11-24: bioc already on 3.25, bioc-release still on 3.23, with
+    the site's config.yaml at 3.23/3.24)."""
+    for universe in ("bioc", "bioc-release"):
+        text = fetch(f"https://{universe}.r-universe.dev/api/packages/BiocVersion", optional=True)
+        version = (json.loads(text) if text else {}).get("Version", "")
+        if version.split(".")[:2] == bioc.split("."):
+            return universe
+    return None
+
+
 def from_runiverse(universe, branch):
     """Software packages, from r-universe. A real origin."""
     pkgs = json.loads(fetch(f"https://{universe}.r-universe.dev/api/packages"))
@@ -227,6 +242,23 @@ def repo_config(mirror=net.MIRROR):
     Bioconductor version to its R version and to release/devel."""
     import yaml
     return yaml.safe_load(net.fetch(f"{mirror}/config.yaml")) or {}
+
+
+def r_version_for(bioc, cfg, mirror=net.MIRROR):
+    """The R version a Bioconductor version not yet in config.yaml's
+    r_ver_for_bioc_ver is built for, from the repository's own Windows binaries:
+    the newest configured R or the next minor. That map is BiocManager's, so
+    the next devel stays out of it until release day even though its
+    repository is already being built (3.25 on R 4.7, 2026-11-24)."""
+    rs = [str(r) for r in (cfg.get("r_ver_for_bioc_ver") or {}).values()]
+    if not rs:
+        return ""
+    major, minor = max(tuple(int(x) for x in r.split(".")) for r in rs)
+    for r in (f"{major}.{minor + 1}", f"{major}.{minor}"):
+        # Exists, not non-empty: a new devel's indexes are empty until its first binaries.
+        if fetch(f"{mirror}/packages/{bioc}/bioc/bin/windows/contrib/{r}/PACKAGES", optional=True) is not None:
+            return r
+    return ""
 
 
 def bin_dirs(rver):
@@ -349,7 +381,7 @@ def main(argv=None):
     ap.add_argument("--out", default="./out")
     ap.add_argument("--universe", default=None,
                     help="r-universe to read software metadata from; default: "
-                         "'bioc' for the devel version in config.yaml, else 'bioc-release'")
+                         "whichever one's BiocVersion is --bioc, else VIEWS")
     ap.add_argument("--software-origin", choices=["runiverse", "views"], default="runiverse")
     ap.add_argument("--data-origin", choices=["tarballs", "views"], default="tarballs",
                     help="origin for annotation/experiment/workflows metadata. "
@@ -360,10 +392,15 @@ def main(argv=None):
 
     cfg = repo_config()
     if args.universe is None:
-        args.universe = "bioc" if str(cfg.get("devel_version")) == args.bioc else "bioc-release"
-    rver = str((cfg.get("r_ver_for_bioc_ver") or {}).get(args.bioc) or "")
+        args.universe = universe_for(args.bioc)
+        if args.universe is None and args.software_origin == "runiverse":
+            print(f"no r-universe builds {args.bioc}; software from VIEWS", file=sys.stderr)
+            args.software_origin = "views"
+    rver = str((cfg.get("r_ver_for_bioc_ver") or {}).get(args.bioc) or "") or r_version_for(args.bioc, cfg)
     if not rver:
-        sys.exit(f"config.yaml has no r_ver_for_bioc_ver for {args.bioc}")
+        sys.exit(f"config.yaml has no r_ver_for_bioc_ver for {args.bioc}, and no R binaries were found for it")
+    # since.record reads the map too; give it the R found for an unlisted version.
+    cfg.setdefault("r_ver_for_bioc_ver", {})[args.bioc] = rver
     branch = "devel" if args.universe == "bioc" else "RELEASE_" + args.bioc.replace(".", "_")
     provenance, repos, tarball_reports = {}, {}, []
 
